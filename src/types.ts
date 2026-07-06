@@ -49,7 +49,12 @@ export interface ChunkingConfig {
 
 export interface SearchConfig {
   mode: "hybrid" | "keyword" | "vector";
+  rank_fusion: "rrf" | "weighted_rrf";
   rrf_k: number;
+  rrf_weights: {
+    keyword: number;
+    vector: number;
+  };
   tier_boost: Record<string, number>;
 }
 

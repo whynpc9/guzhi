@@ -25,6 +25,10 @@ const STOP_WORDS = new Set([
 ]);
 
 export function tokenize(input: string): string[] {
+  return Array.from(new Set(tokenizeTerms(input)));
+}
+
+export function tokenizeTerms(input: string): string[] {
   const normalized = input.toLowerCase().normalize("NFKC");
   const tokens: string[] = [];
   if (segmenter) {
@@ -38,7 +42,7 @@ export function tokenize(input: string): string[] {
       pushToken(tokens, word);
     }
   }
-  return Array.from(new Set(tokens));
+  return tokens;
 }
 
 function pushToken(tokens: string[], word: string): void {

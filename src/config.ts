@@ -61,7 +61,12 @@ const DEFAULT_CONFIG: WenguConfig = {
   },
   search: {
     mode: "hybrid",
+    rank_fusion: "rrf",
     rrf_k: 60,
+    rrf_weights: {
+      keyword: 1,
+      vector: 1,
+    },
     tier_boost: {
       "queries/": 1.5,
       "concepts/": 1.3,
@@ -278,6 +283,30 @@ function validateConfig(config: WenguConfig): void {
   }
   if (config.chunking.max_tokens < config.chunking.target_tokens) {
     throw new WenguError("config", "chunking.max_tokens must be >= chunking.target_tokens.");
+  }
+  if (!["hybrid", "keyword", "vector"].includes(config.search.mode)) {
+    throw new WenguError("config", `Unsupported search mode: ${config.search.mode}`);
+  }
+  if (!["rrf", "weighted_rrf"].includes(config.search.rank_fusion)) {
+    throw new WenguError("config", `Unsupported search rank_fusion: ${config.search.rank_fusion}`);
+  }
+  if (!Number.isFinite(config.search.rrf_k) || config.search.rrf_k <= 0) {
+    throw new WenguError("config", "search.rrf_k must be greater than 0.");
+  }
+  validateRrfWeight("keyword", config.search.rrf_weights.keyword);
+  validateRrfWeight("vector", config.search.rrf_weights.vector);
+  if (
+    config.search.rank_fusion === "weighted_rrf" &&
+    config.search.rrf_weights.keyword === 0 &&
+    config.search.rrf_weights.vector === 0
+  ) {
+    throw new WenguError("config", "weighted_rrf requires at least one positive search.rrf_weights value.");
+  }
+}
+
+function validateRrfWeight(name: string, value: number): void {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new WenguError("config", `search.rrf_weights.${name} must be a non-negative number.`);
   }
 }
 
