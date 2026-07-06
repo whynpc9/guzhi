@@ -5,7 +5,7 @@ import {
   deserializeHeadingPath,
   type StorageAdapter,
 } from "./storage.js";
-import type { ChunkRow, JsonRecord, SearchResult, GuzhiConfig } from "./types.js";
+import type { ChunkRow, ChunkSearchResult, JsonRecord, SearchResult, GuzhiConfig } from "./types.js";
 import { tokenize, tokenizeTerms } from "./tokenize.js";
 
 const BM25_K1 = 1.2;
@@ -16,6 +16,7 @@ const SLUG_FIELD_WEIGHT = 3;
 export interface SearchOptions {
   k: number;
   filters: Record<string, string>;
+  rowFilter?: (row: ChunkRow) => boolean;
   explain?: boolean;
 }
 
@@ -25,13 +26,49 @@ export interface SearchResponse {
   diagnostics: JsonRecord;
 }
 
+export interface ChunkSearchResponse {
+  retrieval_mode: "hybrid" | "keyword_only";
+  results: ChunkSearchResult[];
+  diagnostics: JsonRecord;
+}
+
 export async function runSearch(
   storage: StorageAdapter,
   config: GuzhiConfig,
   query: string,
   options: SearchOptions,
 ): Promise<SearchResponse> {
-  const rows = await storage.fetchSearchCorpus(options.filters);
+  const ranked = await rankSearchChunks(storage, config, query, options);
+  return {
+    retrieval_mode: ranked.retrieval_mode,
+    results: poolByDocument(ranked.results, options.k),
+    diagnostics: ranked.diagnostics,
+  };
+}
+
+export async function runChunkSearch(
+  storage: StorageAdapter,
+  config: GuzhiConfig,
+  query: string,
+  options: SearchOptions,
+): Promise<ChunkSearchResponse> {
+  const ranked = await rankSearchChunks(storage, config, query, options);
+  return {
+    retrieval_mode: ranked.retrieval_mode,
+    results: ranked.results.slice(0, options.k),
+    diagnostics: ranked.diagnostics,
+  };
+}
+
+async function rankSearchChunks(
+  storage: StorageAdapter,
+  config: GuzhiConfig,
+  query: string,
+  options: SearchOptions,
+): Promise<ChunkSearchResponse> {
+  const rows = (await storage.fetchSearchCorpus(options.filters)).filter(
+    options.rowFilter ?? (() => true),
+  );
   const tokens = tokenize(query);
   const keywordScores = scoreKeywordBm25(rows, query, tokens);
   let vectorScores = new Map<string, number>();
@@ -61,7 +98,7 @@ export async function runSearch(
     }
   }
 
-  const fused = fuseScores(
+  const fused = fuseChunkScores(
     rows,
     keywordScores,
     vectorScores,
@@ -70,7 +107,7 @@ export async function runSearch(
   );
   return {
     retrieval_mode: retrievalMode,
-    results: poolByDocument(fused, options.k),
+    results: fused.slice(0, options.k),
     diagnostics,
   };
 }
@@ -161,18 +198,18 @@ function exactMetadataBoost(row: ChunkRow, normalizedQuery: string): number {
   return score;
 }
 
-function fuseScores(
+function fuseChunkScores(
   rows: ChunkRow[],
   keywordScores: Map<string, number>,
   vectorScores: Map<string, number>,
   config: GuzhiConfig["search"],
   explain: boolean,
-): SearchResult[] {
+): ChunkSearchResult[] {
   const rowMap = new Map(rows.map((row) => [row.chunk_uid, row]));
   const keywordRanks = rankMap(keywordScores);
   const vectorRanks = rankMap(vectorScores);
   const ids = new Set([...keywordScores.keys(), ...vectorScores.keys()]);
-  const results: SearchResult[] = [];
+  const results: ChunkSearchResult[] = [];
   const weights = rrfWeights(config);
 
   for (const id of ids) {
@@ -186,13 +223,19 @@ function fuseScores(
     const keywordScore = keywordScores.get(id) ?? 0;
     const vectorScore = vectorScores.get(id) ?? 0;
     results.push({
+      chunk_uid: row.chunk_uid,
+      doc_id: row.doc_id,
       path: row.path,
       slug: row.slug,
       title: row.title,
+      seq: row.seq,
       heading_path: deserializeHeadingPath(row.heading_path),
+      content: row.body,
       snippet: makeSnippet(row.body),
       score,
       evidence: chooseEvidence(keywordScore, vectorScore, row.seq),
+      token_est: row.token_est,
+      content_hash: row.content_hash,
       tier: Number(row.tier ?? 1),
       facets: deserializeFacets(row.facets),
       status_flags: deserializeFlags(row.flags),
@@ -215,6 +258,22 @@ function fuseScores(
     });
   }
   return results.sort((a, b) => b.score - a.score);
+}
+
+function toSearchResult(result: ChunkSearchResult): SearchResult {
+  return {
+    path: result.path,
+    slug: result.slug,
+    title: result.title,
+    heading_path: result.heading_path,
+    snippet: result.snippet,
+    score: result.score,
+    evidence: result.evidence,
+    tier: result.tier,
+    facets: result.facets,
+    status_flags: result.status_flags,
+    explain: result.explain,
+  };
 }
 
 function rrfWeights(config: GuzhiConfig["search"]): { keyword: number; vector: number } {

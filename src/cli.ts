@@ -5,6 +5,7 @@ import { configForDisplay, loadConfig, writeInitialConfig } from "./config.js";
 import { checkEmbeddingProvider } from "./embedding.js";
 import { touchProjectGitignore } from "./lock.js";
 import { runSearch } from "./search.js";
+import { startHttpServer } from "./serve.js";
 import { installSkill } from "./skill.js";
 import { openStorage } from "./storage.js";
 import { GuzhiError } from "./types.js";
@@ -134,6 +135,45 @@ program
         await storage.close();
       }
     });
+  });
+
+program
+  .command("serve")
+  .description("Expose the Markdown retrieval index over HTTP for Dify and RAGFlow integrations.")
+  .option("--host <host>", "HTTP bind host", process.env.GUZHI_SERVE_HOST ?? "127.0.0.1")
+  .option("--port <n>", "HTTP bind port", parsePositiveInteger, envPositiveInteger("GUZHI_SERVE_PORT", 8765))
+  .option("--api-key <key>", "Require Authorization: Bearer <key>", process.env.GUZHI_SERVE_API_KEY)
+  .option("--knowledge-id <id>", "Only accept this Dify external knowledge_id", process.env.GUZHI_SERVE_KNOWLEDGE_ID)
+  .action(async (options) => {
+    try {
+      const loaded = await loadConfig({ cwd: process.cwd(), ...globalOptions() });
+      const runtime = await startHttpServer(loaded, {
+        host: options.host,
+        port: options.port,
+        apiKey: options.apiKey,
+        knowledgeId: options.knowledgeId,
+      });
+      const startup = {
+        url: runtime.url,
+        endpoints: {
+          health: `${runtime.url}/health`,
+          dify_retrieval: `${runtime.url}/retrieval`,
+          ragflow_search: `${runtime.url}/search`,
+        },
+        auth: options.apiKey ? "bearer" : "none",
+        knowledge_id: options.knowledgeId ?? null,
+      };
+      if (program.opts().json) {
+        console.log(JSON.stringify(startup, null, 2));
+      } else {
+        console.error(`guzhi serve listening on ${runtime.url}`);
+        console.error(`Dify endpoint: ${runtime.url} (Dify will call /retrieval)`);
+        console.error(`RAGFlow HTTP Request endpoint: ${runtime.url}/search`);
+      }
+      await waitForShutdown(runtime.close);
+    } catch (error) {
+      emitError(error);
+    }
   });
 
 program
@@ -293,6 +333,11 @@ function parsePositiveInteger(value: string): number {
   return parsed;
 }
 
+function envPositiveInteger(name: string, fallback: number): number {
+  const value = process.env[name];
+  return value ? parsePositiveInteger(value) : fallback;
+}
+
 function collect(value: string, previous: string[]): string[] {
   previous.push(value);
   return previous;
@@ -315,4 +360,19 @@ async function exists(filePath: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+function waitForShutdown(close: () => Promise<void>): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let closing = false;
+    const shutdown = () => {
+      if (closing) return;
+      closing = true;
+      process.off("SIGINT", shutdown);
+      process.off("SIGTERM", shutdown);
+      close().then(resolve, reject);
+    };
+    process.once("SIGINT", shutdown);
+    process.once("SIGTERM", shutdown);
+  });
 }

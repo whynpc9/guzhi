@@ -13,6 +13,7 @@ Guzhi 是一个面向 Markdown wiki / llm-wiki 仓库的本地 RAG 基础设施 
 - `sync` 全量/增量同步、软删除、同步锁、journal。
 - 可选 embedding 队列，支持 OpenAI-compatible `/v1/embeddings`。
 - keyword-only 和 hybrid 检索，支持 RRF / Weighted RRF 融合，返回证据类型、tier、facet、可选 explain。
+- `serve` HTTP 服务：以只读检索 API 接入 Dify External Knowledge API 和 RAGFlow HTTP Request 工作流。
 - `resolve` / `links` / `status` / `doctor` / `config show` 等 agent 友好的 CLI 命令。
 - 存储后端：
   - `pglite`：默认本地 catalog。
@@ -67,11 +68,72 @@ guzhi doctor --check-embedding
 guzhi config show
 ```
 
+启动只读 HTTP 检索服务：
+
+```sh
+guzhi serve --host 127.0.0.1 --port 8765 --api-key dev-secret --knowledge-id my-wiki
+```
+
 所有命令都可以加 `--json`，供 agent 或脚本稳定消费：
 
 ```sh
 guzhi --json search "ICD-10 编码" -k 3
 ```
+
+## HTTP 接入 Dify / RAGFlow
+
+`guzhi serve` 暴露三个端点：
+
+- `GET /health`：服务和索引健康信息。
+- `POST /retrieval`：Dify External Knowledge API 兼容端点。
+- `POST /search`：通用 chunk-level JSON 检索端点，适合 RAGFlow HTTP Request component。
+
+默认监听 `127.0.0.1:8765`。传入 `--api-key` 或设置 `GUZHI_SERVE_API_KEY` 后，`/retrieval` 和 `/search` 会要求：
+
+```http
+Authorization: Bearer <api-key>
+```
+
+### Dify External Knowledge API
+
+启动：
+
+```sh
+guzhi serve --host 0.0.0.0 --port 8765 \
+  --api-key dify-secret \
+  --knowledge-id wiki-prod
+```
+
+在 Dify 里注册 External Knowledge API 时，API endpoint 填服务根地址：
+
+```text
+http://your-host:8765
+```
+
+Dify 会自动追加 `/retrieval`。External Knowledge ID 填 `wiki-prod`；如果没有传 `--knowledge-id`，Guzhi 会接受任意 `knowledge_id`。返回给 Dify 的 `records` 使用完整 chunk 内容作为 `content`，并把 `path`、`slug`、`chunk_uid`、`heading_path`、`facets`、原始 `guzhi_score` 等放进 `metadata`。
+
+### RAGFlow HTTP Request
+
+RAGFlow 的 HTTP Request component 可以直接 POST：
+
+```http
+POST http://your-host:8765/search
+Content-Type: application/json
+Authorization: Bearer dify-secret
+```
+
+```json
+{
+  "query": "主要诊断选择",
+  "k": 5,
+  "score_threshold": 0,
+  "filters": {
+    "safe_for_daily_qa": true
+  }
+}
+```
+
+响应包含 `results[]`，每条结果都有 `content`、归一化 `score`、`raw_score`、`path`、`heading_path`、`evidence` 和 `metadata`。`filters` 是 facet 精确匹配；也可以传 Dify 形状的 `metadata_condition` 来做 `is`、`contains`、`in`、数值比较、日期前后等条件过滤。
 
 ## 配置
 
@@ -235,6 +297,7 @@ guzhi sync
 guzhi status
 guzhi config show
 guzhi search "<query>"
+guzhi serve
 guzhi resolve <slug-or-path>
 guzhi links <slug-or-path>
 guzhi doctor

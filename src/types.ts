@@ -194,6 +194,15 @@ export interface SearchResult {
   explain?: JsonRecord;
 }
 
+export interface ChunkSearchResult extends SearchResult {
+  chunk_uid: string;
+  doc_id: string;
+  seq: number;
+  content: string;
+  token_est: number;
+  content_hash: string;
+}
+
 export class GuzhiError extends Error {
   constructor(
     public readonly kind: "config" | "transient",
