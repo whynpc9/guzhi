@@ -1,7 +1,7 @@
 import type { StorageAdapter } from "./storage.js";
 import type { QueuedChunk } from "./storage.js";
-import type { WenguConfig } from "./types.js";
-import { WenguError } from "./types.js";
+import type { GuzhiConfig } from "./types.js";
+import { GuzhiError } from "./types.js";
 import { estimateTokens } from "./tokenize.js";
 
 export interface EmbeddingSummary {
@@ -12,7 +12,7 @@ export interface EmbeddingSummary {
   dimensions: number | null;
 }
 
-export async function embedBatch(texts: string[], config: WenguConfig["embedding"]): Promise<number[][]> {
+export async function embedBatch(texts: string[], config: GuzhiConfig["embedding"]): Promise<number[][]> {
   if (config.provider === "none") return [];
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), config.timeout_ms);
@@ -20,7 +20,7 @@ export async function embedBatch(texts: string[], config: WenguConfig["embedding
     const headers: Record<string, string> = {
       "content-type": "application/json",
     };
-    const apiKey = process.env.WENGU_EMBEDDING__API_KEY ?? process.env.OPENAI_API_KEY;
+    const apiKey = process.env.GUZHI_EMBEDDING__API_KEY ?? process.env.OPENAI_API_KEY;
     if (apiKey) headers.authorization = `Bearer ${apiKey}`;
 
     const body: Record<string, unknown> = {
@@ -75,7 +75,7 @@ export async function embedBatch(texts: string[], config: WenguConfig["embedding
 
 export async function processEmbeddingQueue(
   storage: StorageAdapter,
-  config: WenguConfig,
+  config: GuzhiConfig,
   options: { limit?: number } = {},
 ): Promise<EmbeddingSummary> {
   if (config.embedding.provider === "none") {
@@ -159,7 +159,7 @@ interface PreparedEmbeddingInput {
 
 function buildEmbeddingBatches(
   chunks: QueuedChunk[],
-  config: WenguConfig,
+  config: GuzhiConfig,
 ): PreparedEmbeddingInput[][] {
   const prepared = chunks.map((chunk) => {
     const input = truncateForEmbedding(chunk.body, config);
@@ -192,7 +192,7 @@ function buildEmbeddingBatches(
   return batches;
 }
 
-function truncateForEmbedding(text: string, config: WenguConfig): string {
+function truncateForEmbedding(text: string, config: GuzhiConfig): string {
   if (estimateTokens(text, config.chunking.cjk_char_per_token) <= config.embedding.max_input_tokens) {
     return text;
   }
@@ -203,10 +203,10 @@ function truncateForEmbedding(text: string, config: WenguConfig): string {
   ) {
     truncated = truncated.slice(0, Math.floor(truncated.length * 0.8));
   }
-  return `${truncated}\n\n[wengu: embedding input truncated]`;
+  return `${truncated}\n\n[guzhi: embedding input truncated]`;
 }
 
-export async function checkEmbeddingProvider(config: WenguConfig): Promise<{
+export async function checkEmbeddingProvider(config: GuzhiConfig): Promise<{
   ok: boolean;
   dimensions?: number;
   message: string;
@@ -215,7 +215,7 @@ export async function checkEmbeddingProvider(config: WenguConfig): Promise<{
     return { ok: true, message: "Embedding provider is disabled." };
   }
   try {
-    const [vector] = await embedBatch(["温故"], config.embedding);
+    const [vector] = await embedBatch(["故知"], config.embedding);
     return {
       ok: true,
       dimensions: vector.length,
@@ -231,7 +231,7 @@ export async function checkEmbeddingProvider(config: WenguConfig): Promise<{
 
 export function throwIfEmbeddingConfigDrift(
   fingerprint: unknown,
-  config: WenguConfig["embedding"],
+  config: GuzhiConfig["embedding"],
 ): void {
   if (!fingerprint || typeof fingerprint !== "object" || config.provider === "none") return;
   const fp = fingerprint as { provider?: string; model?: string; dimensions?: number };
@@ -240,10 +240,10 @@ export function throwIfEmbeddingConfigDrift(
     fp.model !== config.model ||
     (config.dimensions > 0 && fp.dimensions !== config.dimensions)
   ) {
-    throw new WenguError(
+    throw new GuzhiError(
       "config",
       `Embedding configuration differs from existing index fingerprint (${fp.provider}/${fp.model}/${fp.dimensions}).`,
-      "Use the old embedding config or rebuild with `wengu sync --full`.",
+      "Use the old embedding config or rebuild with `guzhi sync --full`.",
     );
   }
 }

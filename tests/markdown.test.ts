@@ -7,7 +7,7 @@ import { parseMarkdownDocument } from "../src/markdown.js";
 
 describe("parseMarkdownDocument", () => {
   it("parses tolerant frontmatter, links, and repo-root footnote sources", async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), "wengu-md-"));
+    const root = await mkdtemp(path.join(os.tmpdir(), "guzhi-md-"));
     try {
       const file = path.join(root, "concepts", "sample.md");
       await mkdir(path.dirname(file), { recursive: true });
@@ -47,7 +47,7 @@ describe("parseMarkdownDocument", () => {
   });
 
   it("honors excluded_from_wiki_knowledge_base", async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), "wengu-md-"));
+    const root = await mkdtemp(path.join(os.tmpdir(), "guzhi-md-"));
     try {
       const file = path.join(root, "eval.md");
       await writeFile(

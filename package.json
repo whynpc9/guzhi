@@ -1,22 +1,22 @@
 {
-  "name": "wengu",
+  "name": "guzhi",
   "version": "0.1.0",
   "description": "Repo-local RAG infrastructure CLI for llm-wiki style Markdown knowledge bases.",
   "type": "module",
   "bin": {
-    "wengu": "./dist/cli.js"
+    "guzhi": "./dist/cli.js"
   },
   "files": [
     "dist/",
     "README.md",
-    "wengu.example.toml"
+    "guzhi.example.toml"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc --noEmit -p tsconfig.json",
     "prepack": "npm run build",
     "test": "vitest run",
-    "test:docker": "docker compose up -d --wait postgres milvus-standalone && WENGU_DOCKER_TESTS=1 vitest run tests/docker.test.ts",
+    "test:docker": "docker compose down --volumes --remove-orphans && docker compose up -d --wait postgres milvus-standalone && GUZHI_DOCKER_TESTS=1 vitest run tests/docker.test.ts",
     "dev": "tsx src/cli.ts"
   },
   "engines": {

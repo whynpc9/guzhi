@@ -58,7 +58,7 @@ export interface SearchConfig {
   tier_boost: Record<string, number>;
 }
 
-export interface WenguConfig {
+export interface GuzhiConfig {
   repo: RepoConfig;
   discovery: DiscoveryConfig;
   storage: StorageConfig;
@@ -68,7 +68,7 @@ export interface WenguConfig {
 }
 
 export interface LoadedConfig {
-  config: WenguConfig;
+  config: GuzhiConfig;
   sources: Record<string, string>;
   configPath: string | null;
   projectRoot: string;
@@ -194,13 +194,13 @@ export interface SearchResult {
   explain?: JsonRecord;
 }
 
-export class WenguError extends Error {
+export class GuzhiError extends Error {
   constructor(
     public readonly kind: "config" | "transient",
     message: string,
     public readonly fixHint?: string,
   ) {
     super(message);
-    this.name = "WenguError";
+    this.name = "GuzhiError";
   }
 }

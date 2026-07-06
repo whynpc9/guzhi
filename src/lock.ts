@@ -1,10 +1,10 @@
 import { open, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { WenguConfig } from "./types.js";
-import { WenguError } from "./types.js";
+import type { GuzhiConfig } from "./types.js";
+import { GuzhiError } from "./types.js";
 
 export async function withSyncLock<T>(
-  config: WenguConfig,
+  config: GuzhiConfig,
   options: { breakLock?: boolean },
   callback: () => Promise<T>,
 ): Promise<T> {
@@ -24,7 +24,7 @@ export async function withSyncLock<T>(
     );
   } catch (error) {
     const existing = await readFile(lockPath, "utf8").catch(() => "");
-    throw new WenguError(
+    throw new GuzhiError(
       "transient",
       `Another sync appears to hold ${lockPath}. ${existing}`,
       "If the process is gone, rerun with `--break-lock`.",
@@ -43,7 +43,7 @@ export async function withSyncLock<T>(
 export async function touchProjectGitignore(projectRoot: string): Promise<void> {
   const gitignore = path.join(projectRoot, ".gitignore");
   const existing = await readFile(gitignore, "utf8").catch(() => "");
-  if (!existing.split(/\r?\n/).includes(".wengu/")) {
-    await writeFile(gitignore, `${existing}${existing.endsWith("\n") || !existing ? "" : "\n"}.wengu/\n`, "utf8");
+  if (!existing.split(/\r?\n/).includes(".guzhi/")) {
+    await writeFile(gitignore, `${existing}${existing.endsWith("\n") || !existing ? "" : "\n"}.guzhi/\n`, "utf8");
   }
 }

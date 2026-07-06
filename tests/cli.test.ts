@@ -24,7 +24,7 @@ describe("CLI numeric options", () => {
 });
 
 async function runCliExpectFailure(k: string): Promise<{ code: number | undefined; stderr: string }> {
-  const root = await mkdtemp(path.join(os.tmpdir(), "wengu-cli-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "guzhi-cli-"));
   try {
     await execFileAsync(process.execPath, [
       "--import",
@@ -33,7 +33,7 @@ async function runCliExpectFailure(k: string): Promise<{ code: number | undefine
       "--repo",
       root,
       "--data-dir",
-      path.join(root, ".wengu", "db"),
+      path.join(root, ".guzhi", "db"),
       "--json",
       "search",
       "query",

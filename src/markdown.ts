@@ -8,7 +8,7 @@ import type {
   ParsedChunk,
   ParsedDocument,
   ParsedFrontmatter,
-  WenguConfig,
+  GuzhiConfig,
 } from "./types.js";
 import {
   commonPrefixScore,
@@ -39,7 +39,7 @@ const CORE_FRONTMATTER_KEYS = new Set([
 export async function parseMarkdownDocument(
   filePath: string,
   absolutePath: string,
-  config: WenguConfig,
+  config: GuzhiConfig,
 ): Promise<ParsedDocument> {
   const fileStat = await stat(absolutePath);
   const diagnostics: Diagnostic[] = [];
@@ -117,7 +117,7 @@ export async function parseMarkdownDocument(
   };
 }
 
-function parseFrontmatter(content: string, filePath: string, config: WenguConfig): {
+function parseFrontmatter(content: string, filePath: string, config: GuzhiConfig): {
   frontmatter: ParsedFrontmatter;
   body: string;
 } {
@@ -363,7 +363,7 @@ function buildChunks(input: {
   description: string | null;
   tags: string[];
   body: string;
-  config: WenguConfig;
+  config: GuzhiConfig;
 }): ParsedChunk[] {
   const summary = [input.title, input.description, input.tags.join(" ")].filter(Boolean).join("\n");
   const chunks: ParsedChunk[] = [
@@ -426,7 +426,7 @@ function splitSections(body: string): Section[] {
   return sections;
 }
 
-function splitOversizeSection(sectionBody: string, config: WenguConfig): string[] {
+function splitOversizeSection(sectionBody: string, config: GuzhiConfig): string[] {
   if (estimateTokens(sectionBody, config.chunking.cjk_char_per_token) <= config.chunking.max_tokens) {
     return [sectionBody];
   }
@@ -454,7 +454,7 @@ function makeChunk(
   headingPath: string[],
   anchor: string | null,
   body: string,
-  config: WenguConfig,
+  config: GuzhiConfig,
   flags: string[],
 ): ParsedChunk {
   const tokenEstimate = estimateTokens(body, config.chunking.cjk_char_per_token);

@@ -2,8 +2,8 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import fg from "fast-glob";
 import ignore from "ignore";
-import type { WenguConfig } from "./types.js";
-import { WenguError } from "./types.js";
+import type { GuzhiConfig } from "./types.js";
+import { GuzhiError } from "./types.js";
 import { posixPath } from "./util.js";
 
 export interface DiscoveredFile {
@@ -11,8 +11,8 @@ export interface DiscoveredFile {
   absolutePath: string;
 }
 
-export async function discoverMarkdownFiles(config: WenguConfig): Promise<DiscoveredFile[]> {
-  const hardExcludes = [".git/**", ".wengu/**", "node_modules/**"];
+export async function discoverMarkdownFiles(config: GuzhiConfig): Promise<DiscoveredFile[]> {
+  const hardExcludes = [".git/**", ".guzhi/**", "node_modules/**"];
   const exclude = [...hardExcludes, ...config.discovery.exclude];
   try {
     const entries = await fg(config.discovery.include, {
@@ -37,10 +37,10 @@ export async function discoverMarkdownFiles(config: WenguConfig): Promise<Discov
       }));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new WenguError(
+    throw new GuzhiError(
       "transient",
       `Discovery failed: ${message}`,
-      "Fix the filesystem error and rerun `wengu sync`.",
+      "Fix the filesystem error and rerun `guzhi sync`.",
     );
   }
 }

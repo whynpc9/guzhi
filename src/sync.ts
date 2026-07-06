@@ -4,8 +4,8 @@ import { discoverMarkdownFiles } from "./discovery.js";
 import { processEmbeddingQueue, throwIfEmbeddingConfigDrift } from "./embedding.js";
 import { withSyncLock } from "./lock.js";
 import { parseMarkdownDocument } from "./markdown.js";
-import type { LoadedConfig, WenguConfig } from "./types.js";
-import { WenguError } from "./types.js";
+import type { LoadedConfig, GuzhiConfig } from "./types.js";
+import { GuzhiError } from "./types.js";
 import { openStorage } from "./storage.js";
 import { newId, writeJsonAtomic } from "./util.js";
 
@@ -155,18 +155,18 @@ export async function runSync(loaded: LoadedConfig, options: SyncOptions): Promi
   });
 }
 
-async function fileStillExists(config: WenguConfig, relativePath: string): Promise<boolean> {
+async function fileStillExists(config: GuzhiConfig, relativePath: string): Promise<boolean> {
   try {
     const fileStat = await stat(path.resolve(config.repo.root, relativePath));
     return fileStat.isFile();
   } catch (error) {
     if (isEnoent(error)) return false;
-    throw new WenguError(
+    throw new GuzhiError(
       "transient",
       `Could not verify deletion candidate ${relativePath}: ${
         error instanceof Error ? error.message : String(error)
       }`,
-      "Fix the filesystem error and rerun `wengu sync`.",
+      "Fix the filesystem error and rerun `guzhi sync`.",
     );
   }
 }
@@ -176,6 +176,6 @@ function isEnoent(error: unknown): boolean {
 }
 
 function classifySyncError(error: unknown): Error {
-  if (error instanceof WenguError) return error;
-  return new WenguError("transient", error instanceof Error ? error.message : String(error));
+  if (error instanceof GuzhiError) return error;
+  return new GuzhiError("transient", error instanceof Error ? error.message : String(error));
 }

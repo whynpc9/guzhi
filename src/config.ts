@@ -1,11 +1,11 @@
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parse, stringify } from "smol-toml";
-import type { LoadedConfig, WenguConfig } from "./types.js";
-import { WenguError } from "./types.js";
+import type { LoadedConfig, GuzhiConfig } from "./types.js";
+import { GuzhiError } from "./types.js";
 import { stripTrailingSlash } from "./util.js";
 
-const DEFAULT_CONFIG: WenguConfig = {
+const DEFAULT_CONFIG: GuzhiConfig = {
   repo: {
     root: ".",
     flavor: "auto",
@@ -21,7 +21,7 @@ const DEFAULT_CONFIG: WenguConfig = {
       "tmp/**",
       "_plans/**",
       ".git/**",
-      ".wengu/**",
+      ".guzhi/**",
       "node_modules/**",
     ],
     respect_gitignore: true,
@@ -31,11 +31,11 @@ const DEFAULT_CONFIG: WenguConfig = {
   },
   storage: {
     backend: "pglite",
-    data_dir: ".wengu/db",
+    data_dir: ".guzhi/db",
     url: "",
     catalog_backend: "pglite",
     milvus_address: "localhost:19530",
-    milvus_collection: "wengu_chunks",
+    milvus_collection: "guzhi_chunks",
     milvus_database: "",
     milvus_token: "",
     milvus_username: "",
@@ -119,7 +119,7 @@ export async function writeInitialConfig(
   cwd: string,
   configPath: string,
   overrides: Partial<LoadConfigOptions>,
-): Promise<WenguConfig> {
+): Promise<GuzhiConfig> {
   const outputPath = path.resolve(cwd, configPath);
   const initial = cloneConfig(DEFAULT_CONFIG);
   if (overrides.repoRoot) initial.repo.root = overrides.repoRoot;
@@ -139,8 +139,8 @@ export async function writeInitialConfig(
   return normalizePaths(initial, cwd);
 }
 
-function cloneConfig(input: WenguConfig): WenguConfig {
-  return JSON.parse(JSON.stringify(input)) as WenguConfig;
+function cloneConfig(input: GuzhiConfig): GuzhiConfig {
+  return JSON.parse(JSON.stringify(input)) as GuzhiConfig;
 }
 
 async function resolveConfigPath(cwd: string, explicit?: string): Promise<string | null> {
@@ -150,10 +150,10 @@ async function resolveConfigPath(cwd: string, explicit?: string): Promise<string
       await access(resolved);
       return resolved;
     } catch {
-      throw new WenguError("config", `Config file not found: ${resolved}`, "Run `wengu init` first.");
+      throw new GuzhiError("config", `Config file not found: ${resolved}`, "Run `guzhi init` first.");
     }
   }
-  const candidate = path.resolve(cwd, "wengu.toml");
+  const candidate = path.resolve(cwd, "guzhi.toml");
   try {
     await access(candidate);
     return candidate;
@@ -175,12 +175,12 @@ function markDefaults(value: unknown, sources: Record<string, string>, prefix = 
 }
 
 function mergeConfig(
-  config: WenguConfig,
+  config: GuzhiConfig,
   patch: Record<string, unknown>,
   sources: Record<string, string>,
   source: string,
   prefix = "",
-): WenguConfig {
+): GuzhiConfig {
   for (const [key, value] of Object.entries(patch)) {
     const pathKey = prefix ? `${prefix}.${key}` : key;
     const target = getByPath(config as unknown as Record<string, unknown>, pathKey);
@@ -194,11 +194,11 @@ function mergeConfig(
   return config;
 }
 
-function applyEnv(config: WenguConfig, sources: Record<string, string>): WenguConfig {
+function applyEnv(config: GuzhiConfig, sources: Record<string, string>): GuzhiConfig {
   for (const [envKey, value] of Object.entries(process.env)) {
-    if (!envKey.startsWith("WENGU_") || value === undefined) continue;
+    if (!envKey.startsWith("GUZHI_") || value === undefined) continue;
     const key = envKey
-      .slice("WENGU_".length)
+      .slice("GUZHI_".length)
       .toLowerCase()
       .split("__")
       .join(".");
@@ -210,10 +210,10 @@ function applyEnv(config: WenguConfig, sources: Record<string, string>): WenguCo
 }
 
 function applyOverrides(
-  config: WenguConfig,
+  config: GuzhiConfig,
   options: LoadConfigOptions,
   sources: Record<string, string>,
-): WenguConfig {
+): GuzhiConfig {
   const overrides: Record<string, unknown> = {};
   if (options.repoRoot) overrides["repo.root"] = options.repoRoot;
   if (options.storageBackend) overrides["storage.backend"] = options.storageBackend;
@@ -234,7 +234,7 @@ function applyOverrides(
   return config;
 }
 
-function normalizePaths(config: WenguConfig, projectRoot: string): WenguConfig {
+function normalizePaths(config: GuzhiConfig, projectRoot: string): GuzhiConfig {
   config.repo.root = stripTrailingSlash(path.resolve(projectRoot, config.repo.root));
   config.storage.data_dir = path.resolve(projectRoot, config.storage.data_dir);
   if (!config.embedding.base_url.endsWith("/embeddings")) {
@@ -243,55 +243,55 @@ function normalizePaths(config: WenguConfig, projectRoot: string): WenguConfig {
   return config;
 }
 
-function validateConfig(config: WenguConfig): void {
+function validateConfig(config: GuzhiConfig): void {
   if (!["pglite", "postgres", "milvus"].includes(config.storage.backend)) {
-    throw new WenguError("config", `Unsupported storage backend: ${config.storage.backend}`);
+    throw new GuzhiError("config", `Unsupported storage backend: ${config.storage.backend}`);
   }
   if (!["pglite", "postgres"].includes(config.storage.catalog_backend)) {
-    throw new WenguError("config", `Unsupported storage catalog_backend: ${config.storage.catalog_backend}`);
+    throw new GuzhiError("config", `Unsupported storage catalog_backend: ${config.storage.catalog_backend}`);
   }
   if (config.storage.backend === "postgres" && !config.storage.url) {
-    throw new WenguError("config", "storage.url is required when storage.backend = \"postgres\".");
+    throw new GuzhiError("config", "storage.url is required when storage.backend = \"postgres\".");
   }
   if (config.storage.backend === "milvus") {
     if (!config.storage.milvus_address) {
-      throw new WenguError("config", "storage.milvus_address is required when storage.backend = \"milvus\".");
+      throw new GuzhiError("config", "storage.milvus_address is required when storage.backend = \"milvus\".");
     }
     if (!config.storage.milvus_collection) {
-      throw new WenguError("config", "storage.milvus_collection is required when storage.backend = \"milvus\".");
+      throw new GuzhiError("config", "storage.milvus_collection is required when storage.backend = \"milvus\".");
     }
     if (config.storage.catalog_backend === "postgres" && !config.storage.url) {
-      throw new WenguError(
+      throw new GuzhiError(
         "config",
         "storage.url is required when storage.backend = \"milvus\" and storage.catalog_backend = \"postgres\".",
       );
     }
     if (config.embedding.provider === "none") {
-      throw new WenguError("config", "Milvus backend requires an embedding provider.");
+      throw new GuzhiError("config", "Milvus backend requires an embedding provider.");
     }
     if (config.embedding.dimensions <= 0) {
-      throw new WenguError("config", "Milvus backend requires embedding.dimensions to be greater than 0.");
+      throw new GuzhiError("config", "Milvus backend requires embedding.dimensions to be greater than 0.");
     }
   }
   if (config.embedding.provider === "openai-compatible") {
     if (!config.embedding.base_url) {
-      throw new WenguError("config", "embedding.base_url is required for openai-compatible provider.");
+      throw new GuzhiError("config", "embedding.base_url is required for openai-compatible provider.");
     }
     if (!config.embedding.model) {
-      throw new WenguError("config", "embedding.model is required for openai-compatible provider.");
+      throw new GuzhiError("config", "embedding.model is required for openai-compatible provider.");
     }
   }
   if (config.chunking.max_tokens < config.chunking.target_tokens) {
-    throw new WenguError("config", "chunking.max_tokens must be >= chunking.target_tokens.");
+    throw new GuzhiError("config", "chunking.max_tokens must be >= chunking.target_tokens.");
   }
   if (!["hybrid", "keyword", "vector"].includes(config.search.mode)) {
-    throw new WenguError("config", `Unsupported search mode: ${config.search.mode}`);
+    throw new GuzhiError("config", `Unsupported search mode: ${config.search.mode}`);
   }
   if (!["rrf", "weighted_rrf"].includes(config.search.rank_fusion)) {
-    throw new WenguError("config", `Unsupported search rank_fusion: ${config.search.rank_fusion}`);
+    throw new GuzhiError("config", `Unsupported search rank_fusion: ${config.search.rank_fusion}`);
   }
   if (!Number.isFinite(config.search.rrf_k) || config.search.rrf_k <= 0) {
-    throw new WenguError("config", "search.rrf_k must be greater than 0.");
+    throw new GuzhiError("config", "search.rrf_k must be greater than 0.");
   }
   validateRrfWeight("keyword", config.search.rrf_weights.keyword);
   validateRrfWeight("vector", config.search.rrf_weights.vector);
@@ -300,13 +300,13 @@ function validateConfig(config: WenguConfig): void {
     config.search.rrf_weights.keyword === 0 &&
     config.search.rrf_weights.vector === 0
   ) {
-    throw new WenguError("config", "weighted_rrf requires at least one positive search.rrf_weights value.");
+    throw new GuzhiError("config", "weighted_rrf requires at least one positive search.rrf_weights value.");
   }
 }
 
 function validateRrfWeight(name: string, value: number): void {
   if (!Number.isFinite(value) || value < 0) {
-    throw new WenguError("config", `search.rrf_weights.${name} must be a non-negative number.`);
+    throw new GuzhiError("config", `search.rrf_weights.${name} must be a non-negative number.`);
   }
 }
 

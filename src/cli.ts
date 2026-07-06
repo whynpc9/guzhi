@@ -7,16 +7,16 @@ import { touchProjectGitignore } from "./lock.js";
 import { runSearch } from "./search.js";
 import { installSkill } from "./skill.js";
 import { openStorage } from "./storage.js";
-import { WenguError } from "./types.js";
+import { GuzhiError } from "./types.js";
 import { runSync } from "./sync.js";
 
 const program = new Command();
 
 program
-  .name("wengu")
+  .name("guzhi")
   .description("Repo-local RAG infrastructure CLI for Markdown wiki repositories.")
   .version("0.1.0")
-  .option("-c, --config <path>", "Path to wengu.toml")
+  .option("-c, --config <path>", "Path to guzhi.toml")
   .option("--repo <path>", "Markdown wiki root override")
   .option("--data-dir <path>", "Local data directory override for PGlite catalog, locks, and journals")
   .option("--storage-backend <backend>", "pglite | postgres | milvus")
@@ -33,14 +33,14 @@ program
 
 program
   .command("init")
-  .description("Create wengu.toml, .wengu/, .gitignore entry, and initialize the configured storage schema.")
+  .description("Create guzhi.toml, .guzhi/, .gitignore entry, and initialize the configured storage schema.")
   .option("--force", "Overwrite existing config")
   .action(async (options) => {
     await handle(async () => {
       const globals = globalOptions();
-      const configPath = globals.configPath ?? "wengu.toml";
+      const configPath = globals.configPath ?? "guzhi.toml";
       if (!options.force && (await exists(configPath))) {
-        throw new WenguError("config", `Config already exists: ${configPath}`, "Use `wengu init --force` to overwrite it.");
+        throw new GuzhiError("config", `Config already exists: ${configPath}`, "Use `guzhi init --force` to overwrite it.");
       }
       const config = await writeInitialConfig(process.cwd(), configPath, globals);
       await mkdir(config.storage.data_dir, { recursive: true });
@@ -163,7 +163,7 @@ program
       const storage = await openStorage(loaded.config);
       try {
         const doc = await storage.findDocument(slugOrPath);
-        if (!doc) throw new WenguError("config", `No active document found for ${slugOrPath}.`);
+        if (!doc) throw new GuzhiError("config", `No active document found for ${slugOrPath}.`);
         return {
           document: { path: doc.path, slug: doc.slug, title: doc.title },
           ...(await storage.listLinksFor(doc.doc_id)),
@@ -204,7 +204,7 @@ program
   .command("skill")
   .description("Skill commands.")
   .command("install")
-  .description("Install a wengu-retrieval skill into the target repo.")
+  .description("Install a guzhi-retrieval skill into the target repo.")
   .action(async () => {
     await handle(async () => {
       const loaded = await loadConfig({ cwd: process.cwd(), ...globalOptions() });
@@ -254,14 +254,14 @@ function emit(value: unknown): void {
 }
 
 function emitError(error: unknown): void {
-  const kind = error instanceof WenguError ? error.kind : "transient";
+  const kind = error instanceof GuzhiError ? error.kind : "transient";
   const message = error instanceof Error ? error.message : String(error);
-  const fixHint = error instanceof WenguError ? error.fixHint : undefined;
+  const fixHint = error instanceof GuzhiError ? error.fixHint : undefined;
   const payload = { error: { kind, message, fix_hint: fixHint } };
   if (program.opts().json) {
     console.error(
       JSON.stringify(
-        process.env.WENGU_DEBUG === "1" && error instanceof Error
+        process.env.GUZHI_DEBUG === "1" && error instanceof Error
           ? { ...payload, stack: error.stack }
           : payload,
         null,
@@ -302,7 +302,7 @@ function parseFilters(values: string[]): Record<string, string> {
   const filters: Record<string, string> = {};
   for (const value of values) {
     const index = value.indexOf("=");
-    if (index <= 0) throw new WenguError("config", `Invalid filter ${value}; expected key=value.`);
+    if (index <= 0) throw new GuzhiError("config", `Invalid filter ${value}; expected key=value.`);
     filters[value.slice(0, index)] = value.slice(index + 1);
   }
   return filters;

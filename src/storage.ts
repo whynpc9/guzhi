@@ -9,9 +9,9 @@ import type {
   ExtractedLink,
   JsonRecord,
   ParsedDocument,
-  WenguConfig,
+  GuzhiConfig,
 } from "./types.js";
-import { WenguError } from "./types.js";
+import { GuzhiError } from "./types.js";
 import { cosineSimilarity, jsonArray, jsonObject, newId, parseVector, sha256 } from "./util.js";
 
 const { Pool } = pg;
@@ -84,7 +84,7 @@ export interface LinkRow {
 
 export type StorageAdapter = SqlStorage;
 
-export async function openStorage(config: WenguConfig): Promise<StorageAdapter> {
+export async function openStorage(config: GuzhiConfig): Promise<StorageAdapter> {
   if (config.storage.backend === "postgres") {
     const storage = new SqlStorage(new PostgresDriver(config.storage.url));
     await storage.migrate();
@@ -107,7 +107,7 @@ export async function openStorage(config: WenguConfig): Promise<StorageAdapter> 
 }
 
 export class PgliteStorage {
-  static async open(config: WenguConfig): Promise<StorageAdapter> {
+  static async open(config: GuzhiConfig): Promise<StorageAdapter> {
     return openStorage(config);
   }
 }
@@ -118,7 +118,7 @@ export class SqlStorage {
     private readonly vectorIndex: VectorIndex | null = null,
   ) {}
 
-  static async open(config: WenguConfig): Promise<StorageAdapter> {
+  static async open(config: GuzhiConfig): Promise<StorageAdapter> {
     return openStorage(config);
   }
 
@@ -134,7 +134,7 @@ export class SqlStorage {
     await this.vectorIndex?.flush();
   }
 
-  static async openPglite(config: WenguConfig): Promise<StorageAdapter> {
+  static async openPglite(config: GuzhiConfig): Promise<StorageAdapter> {
     await mkdir(path.dirname(config.storage.data_dir), { recursive: true });
     const storage = new SqlStorage(await PgliteDriver.open(config.storage.data_dir));
     await storage.migrate();
@@ -290,7 +290,7 @@ export class SqlStorage {
     return result.rows[0] ?? null;
   }
 
-  async upsertDocument(doc: ParsedDocument, embedConfig: WenguConfig["embedding"]): Promise<string> {
+  async upsertDocument(doc: ParsedDocument, embedConfig: GuzhiConfig["embedding"]): Promise<string> {
     const existing = await this.getDocumentByPath(doc.path);
     const docId = existing?.doc_id ?? newId();
     const cachedVectors: VectorRecord[] = [];
@@ -466,7 +466,7 @@ export class SqlStorage {
     chunkUid: string,
     contentHash: string,
     vector: number[],
-    config: WenguConfig["embedding"],
+    config: GuzhiConfig["embedding"],
   ): Promise<void> {
     if (this.vectorIndex) {
       const result = await this.db.query<{ doc_id: string; path: string }>(
@@ -568,7 +568,7 @@ export class SqlStorage {
     return result.rows;
   }
 
-  async setEmbeddingFingerprint(config: WenguConfig["embedding"], dimensions: number): Promise<void> {
+  async setEmbeddingFingerprint(config: GuzhiConfig["embedding"], dimensions: number): Promise<void> {
     await this.setState("embedding_fingerprint", {
       provider: config.provider,
       model: config.model,
@@ -678,7 +678,7 @@ export class SqlStorage {
     tx: Queryable,
     docId: string,
     doc: ParsedDocument,
-    embedConfig: WenguConfig["embedding"],
+    embedConfig: GuzhiConfig["embedding"],
     cachedVectors: VectorRecord[],
   ): Promise<void> {
     await tx.query("DELETE FROM chunks WHERE doc_id = $1", [docId]);
@@ -744,7 +744,7 @@ export class SqlStorage {
   private async lookupCachedEmbedding(
     queryable: Queryable,
     contentHash: string,
-    config: WenguConfig["embedding"],
+    config: GuzhiConfig["embedding"],
   ): Promise<number[] | null> {
     if (config.provider === "none") return null;
     const result = await queryable.query<{ vector: unknown }>(
@@ -845,7 +845,7 @@ class MilvusVectorIndex implements VectorIndex {
   private readonly collection: string;
   private loaded = false;
 
-  constructor(private readonly config: WenguConfig) {
+  constructor(private readonly config: GuzhiConfig) {
     this.collection = config.storage.milvus_collection;
     this.client = new MilvusClient({
       address: config.storage.milvus_address,

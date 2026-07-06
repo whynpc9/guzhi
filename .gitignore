@@ -1,9 +1,11 @@
 node_modules/
 dist/
+.guzhi/
 .wengu/
 .agents/
 coverage/
 *.log
 skills-lock.json
+guzhi.toml
 wengu.toml
 *.local.toml

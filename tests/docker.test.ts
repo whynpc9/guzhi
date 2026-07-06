@@ -8,7 +8,7 @@ import { runSearch } from "../src/search.js";
 import { openStorage } from "../src/storage.js";
 import { runSync } from "../src/sync.js";
 
-const dockerEnabled = process.env.WENGU_DOCKER_TESTS === "1";
+const dockerEnabled = process.env.GUZHI_DOCKER_TESTS === "1";
 const describeDocker = dockerEnabled ? describe : describe.skip;
 
 describeDocker("docker-backed storage adapters", () => {
@@ -19,7 +19,7 @@ describeDocker("docker-backed storage adapters", () => {
         cwd: root,
         repoRoot: root,
         storageBackend: "postgres",
-        storageUrl: process.env.WENGU_TEST_POSTGRES_URL ?? "postgres://wengu:wengu@localhost:55432/wengu",
+        storageUrl: process.env.GUZHI_TEST_POSTGRES_URL ?? "postgres://guzhi:guzhi@localhost:55432/guzhi",
         embeddingProvider: "none",
       });
       const summary = await runSync(loaded, { full: true, noEmbed: true, breakLock: true });
@@ -46,8 +46,8 @@ describeDocker("docker-backed storage adapters", () => {
         cwd: root,
         repoRoot: root,
         storageBackend: "milvus",
-        milvusAddress: process.env.WENGU_TEST_MILVUS_ADDRESS ?? "localhost:19530",
-        milvusCollection: `wengu_test_${Date.now()}`,
+        milvusAddress: process.env.GUZHI_TEST_MILVUS_ADDRESS ?? "localhost:19530",
+        milvusCollection: `guzhi_test_${Date.now()}`,
         embeddingProvider: "openai-compatible",
         embeddingBaseUrl: "http://127.0.0.1:9/v1/embeddings",
         embeddingModel: "test-embedding",
@@ -89,7 +89,7 @@ describeDocker("docker-backed storage adapters", () => {
 });
 
 async function makeTinyRepo(): Promise<string> {
-  const root = await mkdtemp(path.join(os.tmpdir(), "wengu-docker-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "guzhi-docker-"));
   await mkdir(path.join(root, "concepts"), { recursive: true });
   await writeFile(
     path.join(root, "concepts", "alpha.md"),

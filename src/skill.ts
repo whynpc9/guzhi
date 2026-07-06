@@ -1,21 +1,21 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { WenguConfig } from "./types.js";
+import type { GuzhiConfig } from "./types.js";
 
-export async function installSkill(config: WenguConfig): Promise<string> {
-  const skillDir = path.join(config.repo.root, "skills", "wengu-retrieval");
+export async function installSkill(config: GuzhiConfig): Promise<string> {
+  const skillDir = path.join(config.repo.root, "skills", "guzhi-retrieval");
   await mkdir(skillDir, { recursive: true });
   const skillPath = path.join(skillDir, "SKILL.md");
   const facets = ["coding_system", "confidence", "evidence_level", "safe_for_daily_qa", "question_types", "specialty"];
-  const content = `# Wengu Retrieval
+  const content = `# Guzhi Retrieval
 
 Use this skill when you need to locate source pages in this wiki before answering.
 
 ## Commands
 
-- Search first: \`wengu search "<query>" --json\`
-- Resolve a slug: \`wengu resolve <slug> --json\`
-- Inspect links and backlinks: \`wengu links <path-or-slug> --json\`
+- Search first: \`guzhi search "<query>" --json\`
+- Resolve a slug: \`guzhi resolve <slug> --json\`
+- Inspect links and backlinks: \`guzhi links <path-or-slug> --json\`
 
 ## Discipline
 

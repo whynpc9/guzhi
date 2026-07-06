@@ -13,7 +13,7 @@ exclude = [
   "tmp/**",
   "_plans/**",
   ".git/**",
-  ".wengu/**",
+  ".guzhi/**",
   "node_modules/**",
 ]
 respect_gitignore = true
@@ -23,11 +23,11 @@ exclude_frontmatter_flags = ["excluded_from_wiki_knowledge_base"]
 
 [storage]
 backend = "pglite"
-data_dir = ".wengu/db"
+data_dir = ".guzhi/db"
 url = ""
 catalog_backend = "pglite"
 milvus_address = "localhost:19530"
-milvus_collection = "wengu_chunks"
+milvus_collection = "guzhi_chunks"
 milvus_database = ""
 milvus_token = ""
 milvus_username = ""

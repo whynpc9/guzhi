@@ -14,7 +14,7 @@ describe("runSync", () => {
       const oldConfig = await loadConfig({
         cwd: root,
         repoRoot: root,
-        dataDir: path.join(root, ".wengu", "db"),
+        dataDir: path.join(root, ".guzhi", "db"),
         embeddingProvider: "openai-compatible",
         embeddingBaseUrl: "http://127.0.0.1:9/v1/embeddings",
         embeddingModel: "old-model",
@@ -30,7 +30,7 @@ describe("runSync", () => {
       const newConfig = await loadConfig({
         cwd: root,
         repoRoot: root,
-        dataDir: path.join(root, ".wengu", "db"),
+        dataDir: path.join(root, ".guzhi", "db"),
         embeddingProvider: "openai-compatible",
         embeddingBaseUrl: "http://127.0.0.1:9/v1/embeddings",
         embeddingModel: "new-model",
@@ -51,7 +51,7 @@ describe("runSync", () => {
       const loaded = await loadConfig({
         cwd: root,
         repoRoot: root,
-        dataDir: path.join(root, ".wengu", "db"),
+        dataDir: path.join(root, ".guzhi", "db"),
         embeddingProvider: "none",
       });
       await runSync(loaded, { full: true, noEmbed: true, breakLock: true });
@@ -83,7 +83,7 @@ describe("embedding cache", () => {
       const base = {
         cwd: root,
         repoRoot: root,
-        dataDir: path.join(root, ".wengu", "db"),
+        dataDir: path.join(root, ".guzhi", "db"),
         embeddingProvider: "openai-compatible" as const,
         embeddingBaseUrl: "http://127.0.0.1:9/v1/embeddings",
         embeddingModel: "same-model",
@@ -115,7 +115,7 @@ describe("embedding cache", () => {
 });
 
 async function makeTinyRepo(): Promise<string> {
-  const root = await mkdtemp(path.join(os.tmpdir(), "wengu-sync-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "guzhi-sync-"));
   await mkdir(path.join(root, "concepts"), { recursive: true });
   await writeFile(path.join(root, "concepts", "alpha.md"), "# Alpha\nbody\n", "utf8");
   return root;

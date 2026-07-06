@@ -1,8 +1,10 @@
-# Wengu（温故）
+# Guzhi（故知）
 
-Wengu 是一个面向 Markdown wiki / llm-wiki 仓库的本地 RAG 基础设施 CLI。它把仓库里的 Markdown、frontmatter、链接关系和 chunk embedding 同步到一套可丢弃的派生索引中，让 agent 可以用结构化命令检索知识，而不是只依赖人工约定的阅读顺序和 `grep`。
+Guzhi 是一个面向 Markdown wiki / llm-wiki 仓库的本地 RAG 基础设施 CLI。它把仓库里的 Markdown、frontmatter、链接关系和 chunk embedding 同步到一套可丢弃的派生索引中，让 agent 可以用结构化命令检索知识，而不是只依赖人工约定的阅读顺序和 `grep`。
 
-核心边界很简单：Markdown 仓库永远是事实源，`.wengu/` 和外部数据库只是派生索引。删除索引后应该可以重新从仓库同步出来。
+项目早期曾使用 Wengu 作为工作名；公开 npm 包、CLI、配置文件和环境变量前缀统一使用 Guzhi / `guzhi` / `GUZHI_`。
+
+核心边界很简单：Markdown 仓库永远是事实源，`.guzhi/` 和外部数据库只是派生索引。删除索引后应该可以重新从仓库同步出来。
 
 ## 当前能力
 
@@ -42,49 +44,49 @@ node dist/cli.js --help
 在一个 Markdown wiki 仓库或希望为它维护索引的工作目录中初始化：
 
 ```sh
-wengu --repo /path/to/wiki init
+guzhi --repo /path/to/wiki init
 ```
 
 同步索引：
 
 ```sh
-wengu sync
+guzhi sync
 ```
 
 搜索：
 
 ```sh
-wengu search "主要诊断选择" -k 5 --explain
+guzhi search "主要诊断选择" -k 5 --explain
 ```
 
 查看状态：
 
 ```sh
-wengu status
-wengu doctor --check-embedding
-wengu config show
+guzhi status
+guzhi doctor --check-embedding
+guzhi config show
 ```
 
 所有命令都可以加 `--json`，供 agent 或脚本稳定消费：
 
 ```sh
-wengu --json search "ICD-10 编码" -k 3
+guzhi --json search "ICD-10 编码" -k 3
 ```
 
 ## 配置
 
-Wengu 使用仓库根目录下的 `wengu.toml`。配置来源优先级为：
+Guzhi 使用仓库根目录下的 `guzhi.toml`。配置来源优先级为：
 
 ```text
-内置默认值 < wengu.toml < WENGU_* 环境变量 < CLI flag
+内置默认值 < guzhi.toml < GUZHI_* 环境变量 < CLI flag
 ```
 
-可以用 `wengu config show` 查看每个配置值的最终来源。
+可以用 `guzhi config show` 查看每个配置值的最终来源。
 
-本 CLI 仓库中的 `wengu.toml` 用于本地测试，已被 `.gitignore` 忽略。公开发布只保留不含私有路径或内网地址的 `wengu.example.toml`：
+本 CLI 仓库中的 `guzhi.toml` 用于本地测试，已被 `.gitignore` 忽略。公开发布只保留不含私有路径或内网地址的 `guzhi.example.toml`：
 
 ```sh
-cp wengu.example.toml wengu.toml
+cp guzhi.example.toml guzhi.toml
 ```
 
 一个最小配置示例：
@@ -96,7 +98,7 @@ flavor = "auto"
 
 [storage]
 backend = "pglite"
-data_dir = ".wengu/db"
+data_dir = ".guzhi/db"
 
 [embedding]
 provider = "none"
@@ -121,7 +123,7 @@ timeout_ms = 120000
 如果 provider 需要 API key，可以通过环境变量提供：
 
 ```sh
-export WENGU_EMBEDDING__API_KEY=...
+export GUZHI_EMBEDDING__API_KEY=...
 ```
 
 ### 搜索融合
@@ -165,13 +167,13 @@ vector = 1.4
 ```toml
 [storage]
 backend = "pglite"
-data_dir = ".wengu/db"
+data_dir = ".guzhi/db"
 ```
 
 也可以用 flag 临时覆盖：
 
 ```sh
-wengu --storage-backend pglite sync
+guzhi --storage-backend pglite sync
 ```
 
 ### PostgreSQL
@@ -181,14 +183,14 @@ PostgreSQL 后端适合团队共享、较大仓库或希望把 catalog 放进长
 ```toml
 [storage]
 backend = "postgres"
-url = "postgres://wengu:wengu@localhost:55432/wengu"
+url = "postgres://guzhi:guzhi@localhost:55432/guzhi"
 ```
 
 命令行覆盖：
 
 ```sh
-wengu --storage-backend postgres \
-  --storage-url postgres://wengu:wengu@localhost:55432/wengu \
+guzhi --storage-backend postgres \
+  --storage-url postgres://guzhi:guzhi@localhost:55432/guzhi \
   sync
 ```
 
@@ -201,10 +203,10 @@ PGlite catalog + Milvus vector index：
 ```toml
 [storage]
 backend = "milvus"
-data_dir = ".wengu/db"
+data_dir = ".guzhi/db"
 catalog_backend = "pglite"
 milvus_address = "localhost:19530"
-milvus_collection = "wengu_chunks"
+milvus_collection = "guzhi_chunks"
 
 [embedding]
 provider = "openai-compatible"
@@ -218,9 +220,9 @@ PostgreSQL catalog + Milvus vector index：
 [storage]
 backend = "milvus"
 catalog_backend = "postgres"
-url = "postgres://wengu:wengu@localhost:55432/wengu"
+url = "postgres://guzhi:guzhi@localhost:55432/guzhi"
 milvus_address = "localhost:19530"
-milvus_collection = "wengu_chunks"
+milvus_collection = "guzhi_chunks"
 ```
 
 `storage.backend = "milvus"` 必须启用 embedding provider，因为 Milvus 后端没有 keyword-only 的意义；keyword 相关能力由 catalog 负责。
@@ -228,25 +230,25 @@ milvus_collection = "wengu_chunks"
 ## CLI 命令
 
 ```sh
-wengu init
-wengu sync
-wengu status
-wengu config show
-wengu search "<query>"
-wengu resolve <slug-or-path>
-wengu links <slug-or-path>
-wengu doctor
-wengu skill install
+guzhi init
+guzhi sync
+guzhi status
+guzhi config show
+guzhi search "<query>"
+guzhi resolve <slug-or-path>
+guzhi links <slug-or-path>
+guzhi doctor
+guzhi skill install
 ```
 
 常用同步选项：
 
 ```sh
-wengu sync --full
-wengu sync --no-embed
-wengu sync --retry-failed
-wengu sync --dry-run
-wengu sync --embed-limit 100
+guzhi sync --full
+guzhi sync --no-embed
+guzhi sync --retry-failed
+guzhi sync --dry-run
+guzhi sync --embed-limit 100
 ```
 
 ## 测试
@@ -277,17 +279,17 @@ npm run test:docker
 - keyword-only 是一等模式；embedding 是增强层。
 - 同步应幂等，可中断后重跑。
 - 检索结果要对 agent 诚实，显式暴露检索模式和命中证据。
-- Wengu 不做 agent runtime、不做知识合成、不做自动写回 Markdown。
+- Guzhi 不做 agent runtime、不做知识合成、不做自动写回 Markdown。
 
 ## 致谢与关联项目
 
-Wengu 的开发计划吸收了若干 Markdown knowledge-base、agent memory 和检索系统的调研结论。下面这些项目、规范和技术对设计边界有直接影响：
+Guzhi 的开发计划吸收了若干 Markdown knowledge-base、agent memory 和检索系统的调研结论。下面这些项目、规范和技术对设计边界有直接影响：
 
-- **Internal domain wiki corpus**：Wengu 的首个真实目标语料来自一个私有领域 wiki。它验证了 Wengu 需要处理手写 Markdown、YAML frontmatter、Obsidian 风格 wikilinks、来源脚注、OCR/转录页、评测语料排除、证据敏感检索等复杂形态。
-- **llm-wiki / Hermes 风格 wiki**：提供了“Markdown + frontmatter 是事实源，agent 通过渐进式披露读取知识”的基本形态。Wengu 保留这个形态，只补充可丢弃的关键词/向量检索基础设施。
-- **OKF SPEC v0.1（GoogleCloudPlatform/knowledge-catalog）**：影响了 Wengu 的宽容消费模型：未知字段、断链、缺少 index、frontmatter 不完整都不应直接拒绝语料。
-- **GBrain（garrytan/gbrain）**：证明了“Markdown 仓库为 system of record，Postgres 为派生检索索引”的路线可行。Wengu 吸收了 content-hash 增量、hybrid 检索、tier boost、per-document pooling、doctor 修复提示和 embedding 配置漂移防御等经验；不吸收 daemon、dream cycle、实体图谱、合成层等重型 agent-brain 能力。
-- **EverOS（EverMind-AI/EverOS）**：作为“Markdown 事实源 + 可丢弃派生索引”的独立实现，验证了 Wengu 的方向。Wengu 吸收了删除误判防御、失败队列闭环、错误分类、配置来源显示、原子写 journal、watch 模式双通道等工程教训；不吸收 Reflection/OME 写回 Markdown、强 schema frontmatter、常驻 HTTP daemon、LLM ingest、topic taxonomy 等与 Wengu 边界冲突的设计。
+- **Internal domain wiki corpus**：Guzhi 的首个真实目标语料来自一个私有领域 wiki。它验证了 Guzhi 需要处理手写 Markdown、YAML frontmatter、Obsidian 风格 wikilinks、来源脚注、OCR/转录页、评测语料排除、证据敏感检索等复杂形态。
+- **llm-wiki / Hermes 风格 wiki**：提供了“Markdown + frontmatter 是事实源，agent 通过渐进式披露读取知识”的基本形态。Guzhi 保留这个形态，只补充可丢弃的关键词/向量检索基础设施。
+- **OKF SPEC v0.1（GoogleCloudPlatform/knowledge-catalog）**：影响了 Guzhi 的宽容消费模型：未知字段、断链、缺少 index、frontmatter 不完整都不应直接拒绝语料。
+- **GBrain（garrytan/gbrain）**：证明了“Markdown 仓库为 system of record，Postgres 为派生检索索引”的路线可行。Guzhi 吸收了 content-hash 增量、hybrid 检索、tier boost、per-document pooling、doctor 修复提示和 embedding 配置漂移防御等经验；不吸收 daemon、dream cycle、实体图谱、合成层等重型 agent-brain 能力。
+- **EverOS（EverMind-AI/EverOS）**：作为“Markdown 事实源 + 可丢弃派生索引”的独立实现，验证了 Guzhi 的方向。Guzhi 吸收了删除误判防御、失败队列闭环、错误分类、配置来源显示、原子写 journal、watch 模式双通道等工程教训；不吸收 Reflection/OME 写回 Markdown、强 schema frontmatter、常驻 HTTP daemon、LLM ingest、topic taxonomy 等与 Guzhi 边界冲突的设计。
 - **PGlite / PostgreSQL / Milvus**：当前后端路线来自计划中的三后端设计。PGlite 提供默认本地 catalog，PostgreSQL 提供共享 catalog，Milvus 只承担外部向量索引而不接管同步状态或链接关系。
 
-这些 acknowledgement 不是依赖声明。Wengu 是独立 CLI；上述项目是路线验证、约束输入和工程经验来源。
+这些 acknowledgement 不是依赖声明。Guzhi 是独立 CLI；上述项目是路线验证、约束输入和工程经验来源。

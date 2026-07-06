@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { loadConfig } from "../src/config.js";
 import { runSearch } from "../src/search.js";
 import type { Stats, StorageAdapter } from "../src/storage.js";
-import type { ChunkRow, WenguConfig } from "../src/types.js";
+import type { ChunkRow, GuzhiConfig } from "../src/types.js";
 
 vi.mock("../src/embedding.js", () => ({
   embedBatch: vi.fn(async () => [[1, 0, 0]]),
@@ -123,10 +123,10 @@ describe("runSearch rank fusion", () => {
   });
 
   it("loads Weighted RRF settings from config", async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), "wengu-config-"));
+    const root = await mkdtemp(path.join(os.tmpdir(), "guzhi-config-"));
     try {
       await writeFile(
-        path.join(root, "wengu.toml"),
+        path.join(root, "guzhi.toml"),
         [
           "[search]",
           'rank_fusion = "weighted_rrf"',
@@ -158,13 +158,13 @@ describe("runSearch rank fusion", () => {
 
 interface SearchRowsOptions {
   searchMode?: "hybrid" | "keyword" | "vector";
-  rankFusion?: WenguConfig["search"]["rank_fusion"];
-  rrfWeights?: WenguConfig["search"]["rrf_weights"];
+  rankFusion?: GuzhiConfig["search"]["rank_fusion"];
+  rrfWeights?: GuzhiConfig["search"]["rrf_weights"];
   vectorScores?: Map<string, number>;
 }
 
 async function searchRows(query: string, rows: ChunkRow[], options: SearchRowsOptions = {}) {
-  const root = await mkdtemp(path.join(os.tmpdir(), "wengu-search-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "guzhi-search-"));
   try {
     const loaded = await loadConfig({
       cwd: root,

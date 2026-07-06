@@ -5,7 +5,7 @@ import {
   deserializeHeadingPath,
   type StorageAdapter,
 } from "./storage.js";
-import type { ChunkRow, JsonRecord, SearchResult, WenguConfig } from "./types.js";
+import type { ChunkRow, JsonRecord, SearchResult, GuzhiConfig } from "./types.js";
 import { tokenize, tokenizeTerms } from "./tokenize.js";
 
 const BM25_K1 = 1.2;
@@ -27,7 +27,7 @@ export interface SearchResponse {
 
 export async function runSearch(
   storage: StorageAdapter,
-  config: WenguConfig,
+  config: GuzhiConfig,
   query: string,
   options: SearchOptions,
 ): Promise<SearchResponse> {
@@ -165,7 +165,7 @@ function fuseScores(
   rows: ChunkRow[],
   keywordScores: Map<string, number>,
   vectorScores: Map<string, number>,
-  config: WenguConfig["search"],
+  config: GuzhiConfig["search"],
   explain: boolean,
 ): SearchResult[] {
   const rowMap = new Map(rows.map((row) => [row.chunk_uid, row]));
@@ -217,7 +217,7 @@ function fuseScores(
   return results.sort((a, b) => b.score - a.score);
 }
 
-function rrfWeights(config: WenguConfig["search"]): { keyword: number; vector: number } {
+function rrfWeights(config: GuzhiConfig["search"]): { keyword: number; vector: number } {
   if (config.rank_fusion === "weighted_rrf") {
     return config.rrf_weights;
   }
