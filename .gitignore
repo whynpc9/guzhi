@@ -1,5 +1,9 @@
 node_modules/
 dist/
 .wengu/
+.agents/
 coverage/
 *.log
+skills-lock.json
+wengu.toml
+*.local.toml

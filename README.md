@@ -81,6 +81,12 @@ Wengu 使用仓库根目录下的 `wengu.toml`。配置来源优先级为：
 
 可以用 `wengu config show` 查看每个配置值的最终来源。
 
+本 CLI 仓库中的 `wengu.toml` 用于本地测试，已被 `.gitignore` 忽略。公开发布只保留不含私有路径或内网地址的 `wengu.example.toml`：
+
+```sh
+cp wengu.example.toml wengu.toml
+```
+
 一个最小配置示例：
 
 ```toml
@@ -275,9 +281,9 @@ npm run test:docker
 
 ## 致谢与关联项目
 
-Wengu 的开发计划基于 `the Wengu development plan` 中的调研结论。下面这些项目和仓库对设计边界有直接影响：
+Wengu 的开发计划吸收了若干 Markdown knowledge-base、agent memory 和检索系统的调研结论。下面这些项目、规范和技术对设计边界有直接影响：
 
-- **internal-domain-wiki-corpus**：Wengu 的首个真实目标仓库和回归语料来源。它验证了 Wengu 需要处理手写 Markdown、YAML frontmatter、Obsidian 风格 wikilinks、来源脚注、OCR/转录页、评测语料排除、证据敏感检索等复杂形态。
+- **Internal domain wiki corpus**：Wengu 的首个真实目标语料来自一个私有领域 wiki。它验证了 Wengu 需要处理手写 Markdown、YAML frontmatter、Obsidian 风格 wikilinks、来源脚注、OCR/转录页、评测语料排除、证据敏感检索等复杂形态。
 - **llm-wiki / Hermes 风格 wiki**：提供了“Markdown + frontmatter 是事实源，agent 通过渐进式披露读取知识”的基本形态。Wengu 保留这个形态，只补充可丢弃的关键词/向量检索基础设施。
 - **OKF SPEC v0.1（GoogleCloudPlatform/knowledge-catalog）**：影响了 Wengu 的宽容消费模型：未知字段、断链、缺少 index、frontmatter 不完整都不应直接拒绝语料。
 - **GBrain（garrytan/gbrain）**：证明了“Markdown 仓库为 system of record，Postgres 为派生检索索引”的路线可行。Wengu 吸收了 content-hash 增量、hybrid 检索、tier boost、per-document pooling、doctor 修复提示和 embedding 配置漂移防御等经验；不吸收 daemon、dream cycle、实体图谱、合成层等重型 agent-brain 能力。

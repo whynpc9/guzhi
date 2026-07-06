@@ -1,0 +1,63 @@
+[repo]
+root = "."
+flavor = "auto"
+
+[discovery]
+include = ["**/*.md"]
+exclude = [
+  "_eval/**",
+  "skills/**",
+  "templates/**",
+  ".obsidian/**",
+  ".hermes/**",
+  "tmp/**",
+  "_plans/**",
+  ".git/**",
+  ".wengu/**",
+  "node_modules/**",
+]
+respect_gitignore = true
+follow_symlinks = false
+max_file_bytes = 20000000
+exclude_frontmatter_flags = ["excluded_from_wiki_knowledge_base"]
+
+[storage]
+backend = "pglite"
+data_dir = ".wengu/db"
+url = ""
+catalog_backend = "pglite"
+milvus_address = "localhost:19530"
+milvus_collection = "wengu_chunks"
+milvus_database = ""
+milvus_token = ""
+milvus_username = ""
+milvus_password = ""
+milvus_ssl = false
+
+[embedding]
+provider = "none"
+base_url = "https://api.openai.com/v1/embeddings"
+model = "text-embedding-3-small"
+dimensions = 1536
+batch_size = 64
+max_batch_tokens = 30000
+max_input_tokens = 8000
+request_dimensions = false
+timeout_ms = 120000
+
+[chunking]
+target_tokens = 400
+max_tokens = 800
+overlap_tokens = 60
+cjk_char_per_token = 1.6
+
+[search]
+mode = "hybrid"
+rrf_k = 60
+
+[search.tier_boost]
+"queries/" = 1.5
+"concepts/" = 1.3
+"comparisons/" = 1.1
+"_meta/" = 0.8
+"raw/" = 0.5
