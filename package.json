@@ -6,9 +6,15 @@
   "bin": {
     "wengu": "./dist/cli.js"
   },
+  "files": [
+    "dist/",
+    "README.md",
+    "wengu.example.toml"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc --noEmit -p tsconfig.json",
+    "prepack": "npm run build",
     "test": "vitest run",
     "test:docker": "docker compose up -d --wait postgres milvus-standalone && WENGU_DOCKER_TESTS=1 vitest run tests/docker.test.ts",
     "dev": "tsx src/cli.ts"

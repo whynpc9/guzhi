@@ -64,7 +64,11 @@ export async function runSync(loaded: LoadedConfig, options: SyncOptions): Promi
     };
 
     try {
-      throwIfEmbeddingConfigDrift((await storage.getStats()).embedding_fingerprint, config.embedding);
+      if (options.full && !options.dryRun) {
+        await storage.resetIndex();
+      } else {
+        throwIfEmbeddingConfigDrift((await storage.getStats()).embedding_fingerprint, config.embedding);
+      }
       if (options.retryFailed) {
         await storage.retryFailedEmbeddings();
       }
@@ -76,10 +80,6 @@ export async function runSync(loaded: LoadedConfig, options: SyncOptions): Promi
       const limited = options.maxFiles ? discovered.slice(0, options.maxFiles) : discovered;
       summary.discovered = discovered.length;
       await writeJsonAtomic(journalPath, { run_id: runId, started_at: startedAt, discovered: discovered.length });
-
-      if (options.full && !options.dryRun) {
-        await storage.resetIndex();
-      }
 
       const activeBefore = await storage.listActiveDocuments();
       const discoveredSet = new Set(discovered.map((file) => file.path));

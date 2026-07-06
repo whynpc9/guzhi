@@ -27,7 +27,7 @@ program
   .option("--embedding-provider <provider>", "openai-compatible | none")
   .option("--embedding-base-url <url>", "OpenAI-compatible embeddings endpoint")
   .option("--embedding-model <model>", "Embedding model name")
-  .option("--embedding-dimensions <n>", "Expected embedding dimensions", parseInteger)
+  .option("--embedding-dimensions <n>", "Expected embedding dimensions", parsePositiveInteger)
   .option("--search-mode <mode>", "hybrid | keyword | vector")
   .option("--json", "Emit JSON output");
 
@@ -64,8 +64,8 @@ program
   .option("--retry-failed", "Reset retryable embedding failures before processing")
   .option("--dry-run", "Only compute the diff plan")
   .option("--break-lock", "Remove a stale sync lock before starting")
-  .option("--embed-limit <n>", "Process at most N queued chunks for embeddings", parseInteger)
-  .option("--max-files <n>", "Development/testing guard: process at most N discovered files", parseInteger)
+  .option("--embed-limit <n>", "Process at most N queued chunks for embeddings", parsePositiveInteger)
+  .option("--max-files <n>", "Development/testing guard: process at most N discovered files", parsePositiveInteger)
   .action(async (options) => {
     await handle(async () => {
       const loaded = await loadConfig({ cwd: process.cwd(), ...globalOptions() });
@@ -85,7 +85,7 @@ program
   .command("status")
   .description("Show index state and embedding queue health.")
   .option("--failed", "List failed embedding queue rows")
-  .option("--limit <n>", "Rows to show with --failed", parseInteger, 20)
+  .option("--limit <n>", "Rows to show with --failed", parsePositiveInteger, 20)
   .action(async (options) => {
     await handle(async () => {
       const loaded = await loadConfig({ cwd: process.cwd(), ...globalOptions() });
@@ -117,7 +117,7 @@ program
   .command("search")
   .description("Search the Markdown retrieval index.")
   .argument("<query>", "Search query")
-  .option("-k, --k <n>", "Number of document results", parseInteger, 10)
+  .option("-k, --k <n>", "Number of document results", parsePositiveInteger, 10)
   .option("--filter <key=value>", "Facet filter; repeatable", collect, [])
   .option("--explain", "Include score components")
   .action(async (query, options) => {
@@ -281,8 +281,15 @@ function formatHuman(value: unknown): string {
 }
 
 function parseInteger(value: string): number {
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed)) throw new Error(`Expected integer, got ${value}`);
+  if (!/^-?\d+$/.test(value)) throw new Error(`Expected integer, got ${value}`);
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed)) throw new Error(`Expected safe integer, got ${value}`);
+  return parsed;
+}
+
+function parsePositiveInteger(value: string): number {
+  const parsed = parseInteger(value);
+  if (parsed <= 0) throw new Error(`Expected positive integer, got ${value}`);
   return parsed;
 }
 

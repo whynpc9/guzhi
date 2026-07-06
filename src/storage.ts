@@ -244,6 +244,7 @@ export class SqlStorage {
       await tx.query("DELETE FROM links");
       await tx.query("DELETE FROM chunks");
       await tx.query("DELETE FROM documents");
+      await tx.query("DELETE FROM sync_state WHERE key IN ('last_sync', 'embedding_fingerprint')");
     });
   }
 
@@ -750,11 +751,10 @@ export class SqlStorage {
       `
       SELECT vector
       FROM embedding_cache
-      WHERE provider = $1 AND model = $2 AND content_hash = $3
-      ORDER BY dimensions DESC
+      WHERE provider = $1 AND model = $2 AND dimensions = $3 AND content_hash = $4
       LIMIT 1
       `,
-      [config.provider, config.model, contentHash],
+      [config.provider, config.model, config.dimensions, contentHash],
     );
     return parseVector(result.rows[0]?.vector);
   }

@@ -42,12 +42,21 @@ export async function parseMarkdownDocument(
   config: WenguConfig,
 ): Promise<ParsedDocument> {
   const fileStat = await stat(absolutePath);
-  const bytes = await readFile(absolutePath);
   const diagnostics: Diagnostic[] = [];
   const slug = slugFromPath(filePath);
   const conceptId = conceptIdFromPath(filePath);
   const reserved = path.posix.basename(filePath) === "index.md" || path.posix.basename(filePath) === "log.md";
 
+  if (fileStat.size > config.discovery.max_file_bytes) {
+    diagnostics.push({
+      kind: "file_too_large_skipped",
+      message: `File size ${fileStat.size} exceeds discovery.max_file_bytes ${config.discovery.max_file_bytes}.`,
+      path: filePath,
+    });
+    return emptyDocument(filePath, absolutePath, fileStat.size, fileStat.mtimeMs, slug, conceptId, diagnostics);
+  }
+
+  const bytes = await readFile(absolutePath);
   if (bytes.includes(0)) {
     diagnostics.push({
       kind: "binary_markdown_skipped",
