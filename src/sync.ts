@@ -6,7 +6,7 @@ import { withSyncLock } from "./lock.js";
 import { parseMarkdownDocument } from "./markdown.js";
 import type { LoadedConfig, WenguConfig } from "./types.js";
 import { WenguError } from "./types.js";
-import { PgliteStorage } from "./storage.js";
+import { openStorage } from "./storage.js";
 import { newId, writeJsonAtomic } from "./util.js";
 
 export interface SyncOptions {
@@ -41,7 +41,7 @@ export async function runSync(loaded: LoadedConfig, options: SyncOptions): Promi
   const { config } = loaded;
   await mkdir(path.dirname(config.storage.data_dir), { recursive: true });
   return withSyncLock(config, { breakLock: options.breakLock }, async () => {
-    const storage = await PgliteStorage.open(config);
+    const storage = await openStorage(config);
     const runId = newId();
     const startedAt = new Date().toISOString();
     const journalPath = path.join(path.dirname(config.storage.data_dir), "journal", `${runId}.json`);
@@ -136,6 +136,7 @@ export async function runSync(loaded: LoadedConfig, options: SyncOptions): Promi
           repo_root: config.repo.root,
           status: summary.status,
         });
+        await storage.flushVectorIndex();
         await storage.finishRun(runId, summary.status, summary);
       }
       await writeJsonAtomic(journalPath, summary);

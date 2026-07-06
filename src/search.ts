@@ -3,7 +3,7 @@ import {
   deserializeFacets,
   deserializeFlags,
   deserializeHeadingPath,
-  PgliteStorage,
+  type StorageAdapter,
 } from "./storage.js";
 import type { ChunkRow, JsonRecord, SearchResult, WenguConfig } from "./types.js";
 import { countTokenOccurrences, tokenize } from "./tokenize.js";
@@ -21,7 +21,7 @@ export interface SearchResponse {
 }
 
 export async function runSearch(
-  storage: PgliteStorage,
+  storage: StorageAdapter,
   config: WenguConfig,
   query: string,
   options: SearchOptions,
@@ -45,7 +45,7 @@ export async function runSearch(
   ) {
     try {
       const [queryVector] = await embedBatch([query], config.embedding);
-      vectorScores = storage.scoreVectors(rows, queryVector);
+      vectorScores = await storage.scoreVectors(rows, queryVector, 50);
       retrievalMode = vectorScores.size > 0 ? "hybrid" : "keyword_only";
     } catch (error) {
       diagnostics.vector_error = error instanceof Error ? error.message : String(error);

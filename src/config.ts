@@ -32,6 +32,15 @@ const DEFAULT_CONFIG: WenguConfig = {
   storage: {
     backend: "pglite",
     data_dir: ".wengu/db",
+    url: "",
+    catalog_backend: "pglite",
+    milvus_address: "localhost:19530",
+    milvus_collection: "wengu_chunks",
+    milvus_database: "",
+    milvus_token: "",
+    milvus_username: "",
+    milvus_password: "",
+    milvus_ssl: false,
   },
   embedding: {
     provider: "none",
@@ -68,6 +77,11 @@ export interface LoadConfigOptions {
   configPath?: string;
   repoRoot?: string;
   dataDir?: string;
+  storageBackend?: "pglite" | "postgres" | "milvus";
+  storageUrl?: string;
+  catalogBackend?: "pglite" | "postgres";
+  milvusAddress?: string;
+  milvusCollection?: string;
   embeddingProvider?: "openai-compatible" | "none";
   embeddingBaseUrl?: string;
   embeddingModel?: string;
@@ -104,7 +118,12 @@ export async function writeInitialConfig(
   const outputPath = path.resolve(cwd, configPath);
   const initial = cloneConfig(DEFAULT_CONFIG);
   if (overrides.repoRoot) initial.repo.root = overrides.repoRoot;
+  if (overrides.storageBackend) initial.storage.backend = overrides.storageBackend;
+  if (overrides.storageUrl) initial.storage.url = overrides.storageUrl;
+  if (overrides.catalogBackend) initial.storage.catalog_backend = overrides.catalogBackend;
   if (overrides.dataDir) initial.storage.data_dir = overrides.dataDir;
+  if (overrides.milvusAddress) initial.storage.milvus_address = overrides.milvusAddress;
+  if (overrides.milvusCollection) initial.storage.milvus_collection = overrides.milvusCollection;
   if (overrides.embeddingProvider) initial.embedding.provider = overrides.embeddingProvider;
   if (overrides.embeddingBaseUrl) initial.embedding.base_url = overrides.embeddingBaseUrl;
   if (overrides.embeddingModel) initial.embedding.model = overrides.embeddingModel;
@@ -192,7 +211,12 @@ function applyOverrides(
 ): WenguConfig {
   const overrides: Record<string, unknown> = {};
   if (options.repoRoot) overrides["repo.root"] = options.repoRoot;
+  if (options.storageBackend) overrides["storage.backend"] = options.storageBackend;
+  if (options.storageUrl) overrides["storage.url"] = options.storageUrl;
+  if (options.catalogBackend) overrides["storage.catalog_backend"] = options.catalogBackend;
   if (options.dataDir) overrides["storage.data_dir"] = options.dataDir;
+  if (options.milvusAddress) overrides["storage.milvus_address"] = options.milvusAddress;
+  if (options.milvusCollection) overrides["storage.milvus_collection"] = options.milvusCollection;
   if (options.embeddingProvider) overrides["embedding.provider"] = options.embeddingProvider;
   if (options.embeddingBaseUrl) overrides["embedding.base_url"] = options.embeddingBaseUrl;
   if (options.embeddingModel) overrides["embedding.model"] = options.embeddingModel;
@@ -215,8 +239,34 @@ function normalizePaths(config: WenguConfig, projectRoot: string): WenguConfig {
 }
 
 function validateConfig(config: WenguConfig): void {
-  if (config.storage.backend !== "pglite") {
+  if (!["pglite", "postgres", "milvus"].includes(config.storage.backend)) {
     throw new WenguError("config", `Unsupported storage backend: ${config.storage.backend}`);
+  }
+  if (!["pglite", "postgres"].includes(config.storage.catalog_backend)) {
+    throw new WenguError("config", `Unsupported storage catalog_backend: ${config.storage.catalog_backend}`);
+  }
+  if (config.storage.backend === "postgres" && !config.storage.url) {
+    throw new WenguError("config", "storage.url is required when storage.backend = \"postgres\".");
+  }
+  if (config.storage.backend === "milvus") {
+    if (!config.storage.milvus_address) {
+      throw new WenguError("config", "storage.milvus_address is required when storage.backend = \"milvus\".");
+    }
+    if (!config.storage.milvus_collection) {
+      throw new WenguError("config", "storage.milvus_collection is required when storage.backend = \"milvus\".");
+    }
+    if (config.storage.catalog_backend === "postgres" && !config.storage.url) {
+      throw new WenguError(
+        "config",
+        "storage.url is required when storage.backend = \"milvus\" and storage.catalog_backend = \"postgres\".",
+      );
+    }
+    if (config.embedding.provider === "none") {
+      throw new WenguError("config", "Milvus backend requires an embedding provider.");
+    }
+    if (config.embedding.dimensions <= 0) {
+      throw new WenguError("config", "Milvus backend requires embedding.dimensions to be greater than 0.");
+    }
   }
   if (config.embedding.provider === "openai-compatible") {
     if (!config.embedding.base_url) {

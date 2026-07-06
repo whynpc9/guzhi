@@ -1,4 +1,4 @@
-import type { PgliteStorage } from "./storage.js";
+import type { StorageAdapter } from "./storage.js";
 import type { QueuedChunk } from "./storage.js";
 import type { WenguConfig } from "./types.js";
 import { WenguError } from "./types.js";
@@ -74,7 +74,7 @@ export async function embedBatch(texts: string[], config: WenguConfig["embedding
 }
 
 export async function processEmbeddingQueue(
-  storage: PgliteStorage,
+  storage: StorageAdapter,
   config: WenguConfig,
   options: { limit?: number } = {},
 ): Promise<EmbeddingSummary> {

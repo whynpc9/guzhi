@@ -1,6 +1,8 @@
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { PGlite } from "@electric-sql/pglite";
+import { ConsistencyLevelEnum, DataType, MetricType, MilvusClient } from "@zilliz/milvus2-sdk-node";
+import pg from "pg";
 import type {
   ChunkRow,
   DocumentRow,
@@ -12,11 +14,36 @@ import type {
 import { WenguError } from "./types.js";
 import { cosineSimilarity, jsonArray, jsonObject, newId, parseVector, sha256 } from "./util.js";
 
+const { Pool } = pg;
+
 interface Queryable {
   query<T = Record<string, unknown>>(
     sql: string,
     params?: unknown[],
   ): Promise<{ rows: T[]; affectedRows?: number }>;
+}
+
+interface SqlDriver extends Queryable {
+  exec(sql: string): Promise<void>;
+  transaction<T>(callback: (tx: Queryable) => Promise<T>): Promise<T>;
+  close(): Promise<void>;
+}
+
+interface VectorIndex {
+  ensure(dimensions: number): Promise<void>;
+  upsert(vectors: Array<{ chunkUid: string; docId: string; path: string; vector: number[] }>): Promise<void>;
+  deleteByDoc(docId: string): Promise<void>;
+  reset(): Promise<void>;
+  search(queryVector: number[], limit: number): Promise<Map<string, number>>;
+  flush(): Promise<void>;
+  close(): Promise<void>;
+}
+
+interface VectorRecord {
+  chunkUid: string;
+  docId: string;
+  path: string;
+  vector: number[];
 }
 
 export interface Stats {
@@ -55,19 +82,67 @@ export interface LinkRow {
   ambiguous: boolean;
 }
 
-export class PgliteStorage {
-  private constructor(private readonly db: PGlite) {}
+export type StorageAdapter = SqlStorage;
 
-  static async open(config: WenguConfig): Promise<PgliteStorage> {
+export async function openStorage(config: WenguConfig): Promise<StorageAdapter> {
+  if (config.storage.backend === "postgres") {
+    const storage = new SqlStorage(new PostgresDriver(config.storage.url));
+    await storage.migrate();
+    return storage;
+  }
+  if (config.storage.backend === "milvus") {
+    const catalog =
+      config.storage.catalog_backend === "postgres"
+        ? new PostgresDriver(config.storage.url)
+        : await PgliteDriver.open(config.storage.data_dir);
+    const vectorIndex = new MilvusVectorIndex(config);
+    await vectorIndex.ensure(config.embedding.dimensions);
+    const storage = new SqlStorage(catalog, vectorIndex);
+    await storage.migrate();
+    return storage;
+  }
+  const storage = new SqlStorage(await PgliteDriver.open(config.storage.data_dir));
+  await storage.migrate();
+  return storage;
+}
+
+export class PgliteStorage {
+  static async open(config: WenguConfig): Promise<StorageAdapter> {
+    return openStorage(config);
+  }
+}
+
+export class SqlStorage {
+  constructor(
+    private readonly db: SqlDriver,
+    private readonly vectorIndex: VectorIndex | null = null,
+  ) {}
+
+  static async open(config: WenguConfig): Promise<StorageAdapter> {
+    return openStorage(config);
+  }
+
+  hasExternalVectorIndex(): boolean {
+    return this.vectorIndex !== null;
+  }
+
+  async ensureVectorIndex(dimensions: number): Promise<void> {
+    await this.vectorIndex?.ensure(dimensions);
+  }
+
+  async flushVectorIndex(): Promise<void> {
+    await this.vectorIndex?.flush();
+  }
+
+  static async openPglite(config: WenguConfig): Promise<StorageAdapter> {
     await mkdir(path.dirname(config.storage.data_dir), { recursive: true });
-    const db = new PGlite(config.storage.data_dir);
-    await db.waitReady;
-    const storage = new PgliteStorage(db);
+    const storage = new SqlStorage(await PgliteDriver.open(config.storage.data_dir));
     await storage.migrate();
     return storage;
   }
 
   async close(): Promise<void> {
+    await this.vectorIndex?.close();
     await this.db.close();
   }
 
@@ -163,6 +238,7 @@ export class PgliteStorage {
   }
 
   async resetIndex(): Promise<void> {
+    await this.vectorIndex?.reset();
     await this.db.transaction(async (tx) => {
       await tx.query("DELETE FROM embed_queue");
       await tx.query("DELETE FROM links");
@@ -216,6 +292,7 @@ export class PgliteStorage {
   async upsertDocument(doc: ParsedDocument, embedConfig: WenguConfig["embedding"]): Promise<string> {
     const existing = await this.getDocumentByPath(doc.path);
     const docId = existing?.doc_id ?? newId();
+    const cachedVectors: VectorRecord[] = [];
     await this.db.transaction(async (tx) => {
       await tx.query(
         `
@@ -275,18 +352,27 @@ export class PgliteStorage {
           new Date().toISOString(),
         ],
       );
-      await this.replaceChunksInTransaction(tx, docId, doc, embedConfig);
+      await this.replaceChunksInTransaction(tx, docId, doc, embedConfig, cachedVectors);
       await this.replaceLinksInTransaction(tx, docId, doc.links);
     });
+    if (this.vectorIndex) {
+      if (existing) await this.vectorIndex.deleteByDoc(docId);
+      if (cachedVectors.length) await this.vectorIndex.upsert(cachedVectors);
+    }
     return docId;
   }
 
   async tombstoneDocument(filePath: string): Promise<boolean> {
+    const existing = await this.getDocumentByPath(filePath);
     const result = await this.db.query(
       "UPDATE documents SET status = 'deleted', last_synced_at = $2 WHERE path = $1 AND status <> 'deleted'",
       [filePath, new Date().toISOString()],
     );
-    return (result.affectedRows ?? 0) > 0;
+    const changed = (result.affectedRows ?? 0) > 0;
+    if (changed && existing?.doc_id) {
+      await this.vectorIndex?.deleteByDoc(existing.doc_id);
+    }
+    return changed;
   }
 
   async refreshAllLinkResolutions(): Promise<void> {
@@ -381,6 +467,21 @@ export class PgliteStorage {
     vector: number[],
     config: WenguConfig["embedding"],
   ): Promise<void> {
+    if (this.vectorIndex) {
+      const result = await this.db.query<{ doc_id: string; path: string }>(
+        `
+        SELECT d.doc_id, d.path
+        FROM chunks c
+        JOIN documents d ON d.doc_id = c.doc_id
+        WHERE c.chunk_uid = $1
+        `,
+        [chunkUid],
+      );
+      const row = result.rows[0];
+      if (row) {
+        await this.vectorIndex.upsert([{ chunkUid, docId: row.doc_id, path: row.path, vector }]);
+      }
+    }
     await this.db.transaction(async (tx) => {
       await tx.query(
         `
@@ -558,7 +659,10 @@ export class PgliteStorage {
     return { outgoing: outgoing.rows, incoming: incoming.rows, broken: broken.rows };
   }
 
-  scoreVectors(rows: ChunkRow[], queryVector: number[]): Map<string, number> {
+  async scoreVectors(rows: ChunkRow[], queryVector: number[], limit = 50): Promise<Map<string, number>> {
+    if (this.vectorIndex) {
+      return this.vectorIndex.search(queryVector, limit);
+    }
     const scores = new Map<string, number>();
     for (const row of rows) {
       const vector = parseVector(row.embedding);
@@ -574,6 +678,7 @@ export class PgliteStorage {
     docId: string,
     doc: ParsedDocument,
     embedConfig: WenguConfig["embedding"],
+    cachedVectors: VectorRecord[],
   ): Promise<void> {
     await tx.query("DELETE FROM chunks WHERE doc_id = $1", [docId]);
     for (const chunk of doc.chunks) {
@@ -600,6 +705,9 @@ export class PgliteStorage {
           JSON.stringify(chunk.flags),
         ],
       );
+      if (cached) {
+        cachedVectors.push({ chunkUid, docId, path: doc.path, vector: cached });
+      }
       if (embedConfig.provider !== "none" && !cached) {
         await tx.query(
           `
@@ -655,6 +763,218 @@ export class PgliteStorage {
     const result = await this.db.query<{ count: number }>(sql);
     return Number(result.rows[0]?.count ?? 0);
   }
+}
+
+class PgliteDriver implements SqlDriver {
+  private constructor(private readonly pg: PGlite) {}
+
+  static async open(dataDir: string): Promise<PgliteDriver> {
+    await mkdir(path.dirname(dataDir), { recursive: true });
+    const pg = new PGlite(dataDir);
+    await pg.waitReady;
+    return new PgliteDriver(pg);
+  }
+
+  async exec(sql: string): Promise<void> {
+    await this.pg.exec(sql);
+  }
+
+  async query<T = Record<string, unknown>>(
+    sql: string,
+    params?: unknown[],
+  ): Promise<{ rows: T[]; affectedRows?: number }> {
+    return this.pg.query<T>(sql, params);
+  }
+
+  async transaction<T>(callback: (tx: Queryable) => Promise<T>): Promise<T> {
+    return this.pg.transaction(callback);
+  }
+
+  async close(): Promise<void> {
+    await this.pg.close();
+  }
+}
+
+class PostgresDriver implements SqlDriver {
+  private readonly pool: pg.Pool;
+
+  constructor(url: string) {
+    this.pool = new Pool({ connectionString: url });
+  }
+
+  async exec(sql: string): Promise<void> {
+    await this.pool.query(sql);
+  }
+
+  async query<T = Record<string, unknown>>(
+    sql: string,
+    params?: unknown[],
+  ): Promise<{ rows: T[]; affectedRows?: number }> {
+    const result = await this.pool.query(sql, params);
+    return { rows: result.rows as T[], affectedRows: result.rowCount ?? undefined };
+  }
+
+  async transaction<T>(callback: (tx: Queryable) => Promise<T>): Promise<T> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const tx: Queryable = {
+        query: async <R = Record<string, unknown>>(sql: string, params?: unknown[]) => {
+          const result = await client.query(sql, params);
+          return { rows: result.rows as R[], affectedRows: result.rowCount ?? undefined };
+        },
+      };
+      const value = await callback(tx);
+      await client.query("COMMIT");
+      return value;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async close(): Promise<void> {
+    await this.pool.end();
+  }
+}
+
+class MilvusVectorIndex implements VectorIndex {
+  private readonly client: MilvusClient;
+  private readonly collection: string;
+  private loaded = false;
+
+  constructor(private readonly config: WenguConfig) {
+    this.collection = config.storage.milvus_collection;
+    this.client = new MilvusClient({
+      address: config.storage.milvus_address,
+      token: config.storage.milvus_token || undefined,
+      username: config.storage.milvus_username || undefined,
+      password: config.storage.milvus_password || undefined,
+      ssl: config.storage.milvus_ssl,
+      database: config.storage.milvus_database || undefined,
+      logLevel: "error",
+    });
+  }
+
+  async ensure(dimensions: number): Promise<void> {
+    await this.client.connectPromise;
+    const exists = await this.client.hasCollection({ collection_name: this.collection });
+    if (!exists.value) {
+      await this.client.createCollection({
+        collection_name: this.collection,
+        fields: [
+          {
+            name: "chunk_uid",
+            data_type: DataType.VarChar,
+            is_primary_key: true,
+            autoID: false,
+            max_length: 128,
+          },
+          {
+            name: "doc_id",
+            data_type: DataType.VarChar,
+            max_length: 128,
+          },
+          {
+            name: "path",
+            data_type: DataType.VarChar,
+            max_length: 2048,
+          },
+          {
+            name: "vector",
+            data_type: DataType.FloatVector,
+            dim: dimensions,
+          },
+        ],
+        index_params: [
+          {
+            field_name: "vector",
+            index_type: "HNSW",
+            metric_type: MetricType.COSINE,
+            params: { M: 16, efConstruction: 128 },
+          },
+        ],
+      });
+    }
+    await this.load();
+  }
+
+  async upsert(vectors: Array<{ chunkUid: string; docId: string; path: string; vector: number[] }>): Promise<void> {
+    if (!vectors.length) return;
+    await this.load();
+    await this.client.upsert({
+      collection_name: this.collection,
+      data: vectors.map((item) => ({
+        chunk_uid: item.chunkUid,
+        doc_id: item.docId,
+        path: item.path.slice(0, 2048),
+        vector: item.vector,
+      })),
+    });
+  }
+
+  async deleteByDoc(docId: string): Promise<void> {
+    await this.load();
+    await this.client.delete({
+      collection_name: this.collection,
+      filter: `doc_id == "${escapeMilvusString(docId)}"`,
+    });
+  }
+
+  async reset(): Promise<void> {
+    const exists = await this.client.hasCollection({ collection_name: this.collection });
+    if (exists.value) {
+      await this.client.dropCollection({ collection_name: this.collection });
+      this.loaded = false;
+    }
+    await this.ensure(this.config.embedding.dimensions);
+  }
+
+  async search(queryVector: number[], limit: number): Promise<Map<string, number>> {
+    await this.load();
+    const response = await this.client.search({
+      collection_name: this.collection,
+      data: queryVector,
+      anns_field: "vector",
+      limit,
+      metric_type: MetricType.COSINE,
+      consistency_level: ConsistencyLevelEnum.Strong,
+      output_fields: ["chunk_uid"],
+    });
+    const scores = new Map<string, number>();
+    for (const result of response.results as Array<{ chunk_uid?: string; id?: string; score?: number }>) {
+      const chunkUid = result.chunk_uid ?? result.id;
+      if (chunkUid && typeof result.score === "number") {
+        scores.set(chunkUid, result.score);
+      }
+    }
+    return scores;
+  }
+
+  async flush(): Promise<void> {
+    const exists = await this.client.hasCollection({ collection_name: this.collection });
+    if (exists.value) {
+      await this.client.flushSync({ collection_names: [this.collection] });
+      this.loaded = false;
+      await this.load();
+    }
+  }
+
+  async close(): Promise<void> {
+    this.client.closeConnection();
+  }
+
+  private async load(): Promise<void> {
+    if (this.loaded) return;
+    await this.client.loadCollection({ collection_name: this.collection, refresh: this.loaded });
+    this.loaded = true;
+  }
+}
+
+function escapeMilvusString(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
 function resolveLink(

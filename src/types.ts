@@ -15,8 +15,17 @@ export interface DiscoveryConfig {
 }
 
 export interface StorageConfig {
-  backend: "pglite";
+  backend: "pglite" | "postgres" | "milvus";
   data_dir: string;
+  url: string;
+  catalog_backend: "pglite" | "postgres";
+  milvus_address: string;
+  milvus_collection: string;
+  milvus_database: string;
+  milvus_token: string;
+  milvus_username: string;
+  milvus_password: string;
+  milvus_ssl: boolean;
 }
 
 export interface EmbeddingConfig {

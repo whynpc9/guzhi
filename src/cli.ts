@@ -6,7 +6,7 @@ import { checkEmbeddingProvider } from "./embedding.js";
 import { touchProjectGitignore } from "./lock.js";
 import { runSearch } from "./search.js";
 import { installSkill } from "./skill.js";
-import { PgliteStorage } from "./storage.js";
+import { openStorage } from "./storage.js";
 import { WenguError } from "./types.js";
 import { runSync } from "./sync.js";
 
@@ -18,7 +18,12 @@ program
   .version("0.1.0")
   .option("-c, --config <path>", "Path to wengu.toml")
   .option("--repo <path>", "Markdown wiki root override")
-  .option("--data-dir <path>", "PGlite data directory override")
+  .option("--data-dir <path>", "Local data directory override for PGlite catalog, locks, and journals")
+  .option("--storage-backend <backend>", "pglite | postgres | milvus")
+  .option("--storage-url <url>", "Postgres connection URL")
+  .option("--catalog-backend <backend>", "Catalog backend for milvus: pglite | postgres")
+  .option("--milvus-address <address>", "Milvus gRPC address, for example localhost:19530")
+  .option("--milvus-collection <name>", "Milvus collection name")
   .option("--embedding-provider <provider>", "openai-compatible | none")
   .option("--embedding-base-url <url>", "OpenAI-compatible embeddings endpoint")
   .option("--embedding-model <model>", "Embedding model name")
@@ -28,7 +33,7 @@ program
 
 program
   .command("init")
-  .description("Create wengu.toml, .wengu/, .gitignore entry, and initialize the PGlite schema.")
+  .description("Create wengu.toml, .wengu/, .gitignore entry, and initialize the configured storage schema.")
   .option("--force", "Overwrite existing config")
   .action(async (options) => {
     await handle(async () => {
@@ -41,7 +46,7 @@ program
       await mkdir(config.storage.data_dir, { recursive: true });
       await touchProjectGitignore(process.cwd());
       const loaded = await loadConfig({ cwd: process.cwd(), ...globals, configPath });
-      const storage = await PgliteStorage.open(loaded.config);
+      const storage = await openStorage(loaded.config);
       await storage.close();
       return {
         config_path: configPath,
@@ -53,7 +58,7 @@ program
 
 program
   .command("sync")
-  .description("Synchronize Markdown files into the derived PGlite retrieval index.")
+  .description("Synchronize Markdown files into the derived retrieval index.")
   .option("--full", "Drop and rebuild the derived index")
   .option("--no-embed", "Skip embedding for this run")
   .option("--retry-failed", "Reset retryable embedding failures before processing")
@@ -84,7 +89,7 @@ program
   .action(async (options) => {
     await handle(async () => {
       const loaded = await loadConfig({ cwd: process.cwd(), ...globalOptions() });
-      const storage = await PgliteStorage.open(loaded.config);
+      const storage = await openStorage(loaded.config);
       try {
         const stats = await storage.getStats();
         if (options.failed) {
@@ -118,7 +123,7 @@ program
   .action(async (query, options) => {
     await handle(async () => {
       const loaded = await loadConfig({ cwd: process.cwd(), ...globalOptions() });
-      const storage = await PgliteStorage.open(loaded.config);
+      const storage = await openStorage(loaded.config);
       try {
         return await runSearch(storage, loaded.config, query, {
           k: options.k,
@@ -138,7 +143,7 @@ program
   .action(async (slugOrPath) => {
     await handle(async () => {
       const loaded = await loadConfig({ cwd: process.cwd(), ...globalOptions() });
-      const storage = await PgliteStorage.open(loaded.config);
+      const storage = await openStorage(loaded.config);
       try {
         const rows = await storage.resolveSlug(slugOrPath);
         return { query: slugOrPath, count: rows.length, results: rows };
@@ -155,7 +160,7 @@ program
   .action(async (slugOrPath) => {
     await handle(async () => {
       const loaded = await loadConfig({ cwd: process.cwd(), ...globalOptions() });
-      const storage = await PgliteStorage.open(loaded.config);
+      const storage = await openStorage(loaded.config);
       try {
         const doc = await storage.findDocument(slugOrPath);
         if (!doc) throw new WenguError("config", `No active document found for ${slugOrPath}.`);
@@ -171,12 +176,12 @@ program
 
 program
   .command("doctor")
-  .description("Check config, PGlite schema, queue health, and optionally embedding provider reachability.")
+  .description("Check config, storage schema, queue health, and optionally embedding provider reachability.")
   .option("--check-embedding", "Call the configured embedding provider once")
   .action(async (options) => {
     await handle(async () => {
       const loaded = await loadConfig({ cwd: process.cwd(), ...globalOptions() });
-      const storage = await PgliteStorage.open(loaded.config);
+      const storage = await openStorage(loaded.config);
       try {
         const stats = await storage.getStats();
         const embedding = options.checkEmbedding
@@ -218,6 +223,11 @@ function globalOptions() {
     configPath: opts.config as string | undefined,
     repoRoot: opts.repo as string | undefined,
     dataDir: opts.dataDir as string | undefined,
+    storageBackend: opts.storageBackend as "pglite" | "postgres" | "milvus" | undefined,
+    storageUrl: opts.storageUrl as string | undefined,
+    catalogBackend: opts.catalogBackend as "pglite" | "postgres" | undefined,
+    milvusAddress: opts.milvusAddress as string | undefined,
+    milvusCollection: opts.milvusCollection as string | undefined,
     embeddingProvider: opts.embeddingProvider as "openai-compatible" | "none" | undefined,
     embeddingBaseUrl: opts.embeddingBaseUrl as string | undefined,
     embeddingModel: opts.embeddingModel as string | undefined,

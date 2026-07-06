@@ -10,6 +10,7 @@
     "build": "tsc -p tsconfig.json",
     "check": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
+    "test:docker": "docker compose up -d --wait postgres milvus-standalone && WENGU_DOCKER_TESTS=1 vitest run tests/docker.test.ts",
     "dev": "tsx src/cli.ts"
   },
   "engines": {
@@ -17,14 +18,17 @@
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.3.14",
+    "@zilliz/milvus2-sdk-node": "^3.0.3",
     "commander": "^14.0.0",
     "fast-glob": "^3.3.3",
     "ignore": "^7.0.5",
+    "pg": "^8.22.0",
     "smol-toml": "^1.4.2",
     "yaml": "^2.8.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.10",
+    "@types/pg": "^8.20.0",
     "tsx": "^4.20.3",
     "typescript": "^5.8.3",
     "vitest": "^3.2.4"
