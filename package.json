@@ -1,0 +1,32 @@
+{
+  "name": "wengu",
+  "version": "0.1.0",
+  "description": "Repo-local RAG infrastructure CLI for llm-wiki style Markdown knowledge bases.",
+  "type": "module",
+  "bin": {
+    "wengu": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "dev": "tsx src/cli.ts"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.3.14",
+    "commander": "^14.0.0",
+    "fast-glob": "^3.3.3",
+    "ignore": "^7.0.5",
+    "smol-toml": "^1.4.2",
+    "yaml": "^2.8.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.10",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  }
+}
