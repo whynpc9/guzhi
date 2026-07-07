@@ -4,7 +4,7 @@
   "description": "Repo-local RAG infrastructure CLI for llm-wiki style Markdown knowledge bases.",
   "type": "module",
   "bin": {
-    "guzhi": "./dist/cli.js"
+    "guzhi": "dist/cli.js"
   },
   "files": [
     "dist/",
