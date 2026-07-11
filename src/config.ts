@@ -203,6 +203,7 @@ function applyEnv(config: GuzhiConfig, sources: Record<string, string>): GuzhiCo
       .split("__")
       .join(".");
     const existing = getByPath(config as unknown as Record<string, unknown>, key);
+    if (existing === undefined) continue;
     setByPath(config as unknown as Record<string, unknown>, key, coerceEnvValue(value, existing));
     sources[key] = `env:${envKey}`;
   }
@@ -344,9 +345,31 @@ function coerceEnvValue(value: string, existing: unknown): unknown {
 
 export function configForDisplay(loaded: LoadedConfig): Record<string, unknown> {
   return {
-    config: loaded.config,
+    config: redactSecrets(loaded.config),
     sources: loaded.sources,
     config_path: loaded.configPath,
     project_root: loaded.projectRoot,
   };
+}
+
+function redactSecrets(value: unknown, key = ""): unknown {
+  if (/(?:api[_-]?key|password|token|secret)/i.test(key) && value !== "") {
+    return "[REDACTED]";
+  }
+  if (typeof value === "string" && /(?:url|address)/i.test(key)) {
+    try {
+      const parsed = new URL(value);
+      if (parsed.password) parsed.password = "[REDACTED]";
+      return parsed.toString();
+    } catch {
+      return value;
+    }
+  }
+  if (Array.isArray(value)) return value.map((item) => redactSecrets(item));
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([childKey, child]) => [childKey, redactSecrets(child, childKey)]),
+    );
+  }
+  return value;
 }

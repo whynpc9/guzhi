@@ -94,8 +94,9 @@ export async function processEmbeddingQueue(
   let failed = 0;
   let dimensions: number | null = null;
   const max = options.limit ?? Number.POSITIVE_INFINITY;
+  let retryLater = false;
 
-  while (attempted < max) {
+  while (attempted < max && !retryLater) {
     const batchSize = Math.min(config.embedding.batch_size, max - attempted);
     const queued = await storage.listQueuedChunks(batchSize);
     if (!queued.length) break;
@@ -105,38 +106,41 @@ export async function processEmbeddingQueue(
       if (attempted >= max) break;
       processedAny = true;
       attempted += batch.length;
-    try {
-      const vectors = await embedBatch(
-        batch.map((chunk) => chunk.input),
-        config.embedding,
-      );
-      for (let index = 0; index < batch.length; index += 1) {
-        const vector = vectors[index];
-        if (config.embedding.dimensions > 0 && vector.length !== config.embedding.dimensions) {
-          const message = `Embedding dimension mismatch: expected ${config.embedding.dimensions}, got ${vector.length}.`;
-          await storage.markEmbeddingFailure(batch[index].chunk.chunk_uid, message, false);
-          failed += 1;
-          continue;
-        }
-        dimensions = vector.length;
-        await storage.fulfillEmbedding(
-          batch[index].chunk.chunk_uid,
-          batch[index].chunk.content_hash,
-          vector,
+      try {
+        const vectors = await embedBatch(
+          batch.map((chunk) => chunk.input),
           config.embedding,
         );
-        await storage.setEmbeddingFingerprint(config.embedding, vector.length);
-        succeeded += 1;
+        for (let index = 0; index < batch.length; index += 1) {
+          const vector = vectors[index];
+          if (config.embedding.dimensions > 0 && vector.length !== config.embedding.dimensions) {
+            const message = `Embedding dimension mismatch: expected ${config.embedding.dimensions}, got ${vector.length}.`;
+            await storage.markEmbeddingFailure(batch[index].chunk.chunk_uid, message, false);
+            failed += 1;
+            continue;
+          }
+          dimensions = vector.length;
+          await storage.fulfillEmbedding(
+            batch[index].chunk.chunk_uid,
+            batch[index].chunk.content_hash,
+            vector,
+            config.embedding,
+          );
+          await storage.setEmbeddingFingerprint(config.embedding, vector.length);
+          succeeded += 1;
+        }
+      } catch (error) {
+        const retryable = error instanceof EmbeddingHttpError ? error.retryable : true;
+        const message = error instanceof Error ? error.message : String(error);
+        for (const item of batch) {
+          await storage.markEmbeddingFailure(item.chunk.chunk_uid, message, retryable);
+          failed += 1;
+        }
+        if (retryable) {
+          retryLater = true;
+          break;
+        }
       }
-    } catch (error) {
-      const retryable = error instanceof EmbeddingHttpError ? error.retryable : true;
-      const message = error instanceof Error ? error.message : String(error);
-      for (const item of batch) {
-        await storage.markEmbeddingFailure(item.chunk.chunk_uid, message, retryable);
-        failed += 1;
-      }
-      if (!retryable) break;
-    }
     }
     if (!processedAny) break;
   }

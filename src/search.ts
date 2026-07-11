@@ -107,7 +107,7 @@ async function rankSearchChunks(
   );
   return {
     retrieval_mode: retrievalMode,
-    results: fused.slice(0, options.k),
+    results: fused,
     diagnostics,
   };
 }

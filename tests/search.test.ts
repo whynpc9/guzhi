@@ -12,6 +12,46 @@ vi.mock("../src/embedding.js", () => ({
 }));
 
 describe("runSearch keyword BM25", () => {
+  it("returns k documents even when one document owns the top chunks", async () => {
+    const rows = [
+      ...Array.from({ length: 5 }, (_, index) =>
+        chunkRow({
+          chunk_uid: `dominant-${index}`,
+          doc_id: "dominant",
+          path: "concepts/dominant.md",
+          slug: "dominant",
+          title: "Dominant alpha",
+          seq: index,
+          body: `alpha alpha alpha ${index}`,
+        }),
+      ),
+      chunkRow({
+        chunk_uid: "second",
+        doc_id: "second",
+        path: "concepts/second.md",
+        slug: "second",
+        title: "Second",
+        body: "alpha",
+      }),
+      chunkRow({
+        chunk_uid: "third",
+        doc_id: "third",
+        path: "concepts/third.md",
+        slug: "third",
+        title: "Third",
+        body: "alpha",
+      }),
+    ];
+
+    const result = await searchRows("alpha", rows, { k: 3 });
+
+    expect(result.results.map((item) => item.path)).toEqual([
+      "concepts/dominant.md",
+      "concepts/second.md",
+      "concepts/third.md",
+    ]);
+  });
+
   it("ranks rare query terms above repeated common terms", async () => {
     const result = await searchRows("alpha zeta", [
       chunkRow({
@@ -157,6 +197,7 @@ describe("runSearch rank fusion", () => {
 });
 
 interface SearchRowsOptions {
+  k?: number;
   searchMode?: "hybrid" | "keyword" | "vector";
   rankFusion?: GuzhiConfig["search"]["rank_fusion"];
   rrfWeights?: GuzhiConfig["search"]["rrf_weights"];
@@ -175,7 +216,7 @@ async function searchRows(query: string, rows: ChunkRow[], options: SearchRowsOp
     if (options.rankFusion) loaded.config.search.rank_fusion = options.rankFusion;
     if (options.rrfWeights) loaded.config.search.rrf_weights = options.rrfWeights;
     return await runSearch(fakeStorage(rows, options.vectorScores), loaded.config, query, {
-      k: rows.length,
+      k: options.k ?? rows.length,
       filters: {},
       explain: true,
     });
